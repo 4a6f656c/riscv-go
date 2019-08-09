@@ -34,6 +34,10 @@
 //	}
 //	fmt.Printf("read %d bytes: %q\n", count, data[:count])
 //
+// Note: The maximum number of concurrent operations on a File may be limited by
+// the OS or the system. The number should be high, but exceeding it may degrade
+// performance or cause other issues.
+//
 package os
 
 import (
@@ -406,7 +410,7 @@ func UserCacheDir() (string, error) {
 // On Unix systems, it returns $XDG_CONFIG_HOME as specified by
 // https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html if
 // non-empty, else $HOME/.config.
-// On Darwin, it returns $HOME/Library/Preferences.
+// On Darwin, it returns $HOME/Library/Application Support.
 // On Windows, it returns %AppData%.
 // On Plan 9, it returns $home/lib.
 //
@@ -427,7 +431,7 @@ func UserConfigDir() (string, error) {
 		if dir == "" {
 			return "", errors.New("$HOME is not defined")
 		}
-		dir += "/Library/Preferences"
+		dir += "/Library/Application Support"
 
 	case "plan9":
 		dir = Getenv("home")

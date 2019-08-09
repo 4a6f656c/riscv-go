@@ -493,6 +493,9 @@ General-purpose environment variables:
 	GOCACHE
 		The directory where the go command will store cached
 		information for reuse in future builds.
+	GODEBUG
+		Enable various debugging facilities. See 'go doc runtime'
+		for details.
 	GOENV
 		The location of the Go environment configuration file.
 		Cannot be set using 'go env -w'.
@@ -509,9 +512,17 @@ General-purpose environment variables:
 	GOPATH
 		For more details see: 'go help gopath'.
 	GOPROXY
-		URL of Go module proxy. See 'go help goproxy'.
+		URL of Go module proxy. See 'go help modules'.
+	GOPRIVATE, GONOPROXY, GONOSUMDB
+		Comma-separated list of glob patterns (in the syntax of Go's path.Match)
+		of module path prefixes that should always be fetched directly
+		or that should not be compared against the checksum database.
+		See 'go help module-private'.
 	GOROOT
 		The root of the go tree.
+	GOSUMDB
+		The name of checksum database to use and optionally its public key and
+		URL. See 'go help module-auth'.
 	GOTMPDIR
 		The directory where the go command will write
 		temporary source files, packages, and binaries.

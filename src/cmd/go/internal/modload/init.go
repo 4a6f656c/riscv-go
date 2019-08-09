@@ -316,7 +316,7 @@ func InitMod() {
 	}
 
 	gomod := filepath.Join(modRoot, "go.mod")
-	data, err := ioutil.ReadFile(gomod)
+	data, err := renameio.ReadFile(gomod)
 	if err != nil {
 		base.Fatalf("go: %v", err)
 	}
@@ -518,6 +518,9 @@ func findAltConfig(dir string) (root, name string) {
 func findModulePath(dir string) (string, error) {
 	if CmdModModule != "" {
 		// Running go mod init x/y/z; return x/y/z.
+		if err := module.CheckImportPath(CmdModModule); err != nil {
+			return "", err
+		}
 		return CmdModModule, nil
 	}
 
@@ -696,7 +699,7 @@ func WriteGoMod() {
 	defer unlock()
 
 	file := filepath.Join(modRoot, "go.mod")
-	old, err := ioutil.ReadFile(file)
+	old, err := renameio.ReadFile(file)
 	if !bytes.Equal(old, modFileData) {
 		if bytes.Equal(old, new) {
 			// Some other process wrote the same go.mod file that we were about to write.
@@ -733,13 +736,21 @@ func fixVersion(path, vers string) (string, error) {
 	// Avoid the query if it looks OK.
 	_, pathMajor, ok := module.SplitPathVersion(path)
 	if !ok {
-		return "", fmt.Errorf("malformed module path: %s", path)
+		return "", &module.ModuleError{
+			Path: path,
+			Err: &module.InvalidVersionError{
+				Version: vers,
+				Err:     fmt.Errorf("malformed module path %q", path),
+			},
+		}
 	}
-	if vers != "" && module.CanonicalVersion(vers) == vers && module.MatchPathMajor(vers, pathMajor) {
-		return vers, nil
+	if vers != "" && module.CanonicalVersion(vers) == vers {
+		if err := module.MatchPathMajor(vers, pathMajor); err == nil {
+			return vers, nil
+		}
 	}
 
-	info, err := Query(path, vers, nil)
+	info, err := Query(path, vers, "", nil)
 	if err != nil {
 		return "", err
 	}

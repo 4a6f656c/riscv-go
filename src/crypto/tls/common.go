@@ -23,11 +23,14 @@ import (
 )
 
 const (
-	VersionSSL30 = 0x0300
 	VersionTLS10 = 0x0301
 	VersionTLS11 = 0x0302
 	VersionTLS12 = 0x0303
 	VersionTLS13 = 0x0304
+
+	// Deprecated: SSLv3 is cryptographically broken, and will be
+	// removed in Go 1.14. See golang.org/issue/32716.
+	VersionSSL30 = 0x0300
 )
 
 const (
@@ -177,6 +180,21 @@ var supportedSignatureAlgorithms = []SignatureScheme{
 	PSSWithSHA384,
 	PSSWithSHA512,
 	PKCS1WithSHA256,
+	PKCS1WithSHA384,
+	PKCS1WithSHA512,
+	ECDSAWithP384AndSHA384,
+	ECDSAWithP521AndSHA512,
+	PKCS1WithSHA1,
+	ECDSAWithSHA1,
+}
+
+// supportedSignatureAlgorithmsTLS12 contains the signature and hash algorithms
+// that are supported in TLS 1.2, where it is possible to distinguish the
+// protocol version. This is temporary, see Issue 32425.
+var supportedSignatureAlgorithmsTLS12 = []SignatureScheme{
+	PKCS1WithSHA256,
+	ECDSAWithP256AndSHA256,
+	Ed25519,
 	PKCS1WithSHA384,
 	PKCS1WithSHA512,
 	ECDSAWithP384AndSHA384,

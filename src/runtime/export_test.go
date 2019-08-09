@@ -545,18 +545,23 @@ type Span struct {
 }
 
 func AllocSpan(base, npages uintptr, scavenged bool) Span {
-	lock(&mheap_.lock)
-	s := (*mspan)(mheap_.spanalloc.alloc())
-	unlock(&mheap_.lock)
+	var s *mspan
+	systemstack(func() {
+		lock(&mheap_.lock)
+		s = (*mspan)(mheap_.spanalloc.alloc())
+		unlock(&mheap_.lock)
+	})
 	s.init(base, npages)
 	s.scavenged = scavenged
 	return Span{s}
 }
 
 func (s *Span) Free() {
-	lock(&mheap_.lock)
-	mheap_.spanalloc.free(unsafe.Pointer(s.mspan))
-	unlock(&mheap_.lock)
+	systemstack(func() {
+		lock(&mheap_.lock)
+		mheap_.spanalloc.free(unsafe.Pointer(s.mspan))
+		unlock(&mheap_.lock)
+	})
 	s.mspan = nil
 }
 
@@ -629,9 +634,11 @@ func (t *Treap) Insert(s Span) {
 	// allocation which requires the mheap_ lock to manipulate.
 	// Locking here is safe because the treap itself never allocs
 	// or otherwise ends up grabbing this lock.
-	lock(&mheap_.lock)
-	t.insert(s.mspan)
-	unlock(&mheap_.lock)
+	systemstack(func() {
+		lock(&mheap_.lock)
+		t.insert(s.mspan)
+		unlock(&mheap_.lock)
+	})
 	t.CheckInvariants()
 }
 
@@ -644,17 +651,21 @@ func (t *Treap) Erase(i TreapIter) {
 	// freeing which requires the mheap_ lock to manipulate.
 	// Locking here is safe because the treap itself never allocs
 	// or otherwise ends up grabbing this lock.
-	lock(&mheap_.lock)
-	t.erase(i.treapIter)
-	unlock(&mheap_.lock)
+	systemstack(func() {
+		lock(&mheap_.lock)
+		t.erase(i.treapIter)
+		unlock(&mheap_.lock)
+	})
 	t.CheckInvariants()
 }
 
 func (t *Treap) RemoveSpan(s Span) {
 	// See Erase about locking.
-	lock(&mheap_.lock)
-	t.removeSpan(s.mspan)
-	unlock(&mheap_.lock)
+	systemstack(func() {
+		lock(&mheap_.lock)
+		t.removeSpan(s.mspan)
+		unlock(&mheap_.lock)
+	})
 	t.CheckInvariants()
 }
 
@@ -669,4 +680,38 @@ func (t *Treap) Size() int {
 func (t *Treap) CheckInvariants() {
 	t.mTreap.treap.walkTreap(checkTreapNode)
 	t.mTreap.treap.validateInvariants()
+}
+
+func RunGetgThreadSwitchTest() {
+	// Test that getg works correctly with thread switch.
+	// With gccgo, if we generate getg inlined, the backend
+	// may cache the address of the TLS variable, which
+	// will become invalid after a thread switch. This test
+	// checks that the bad caching doesn't happen.
+
+	ch := make(chan int)
+	go func(ch chan int) {
+		ch <- 5
+		LockOSThread()
+	}(ch)
+
+	g1 := getg()
+
+	// Block on a receive. This is likely to get us a thread
+	// switch. If we yield to the sender goroutine, it will
+	// lock the thread, forcing us to resume on a different
+	// thread.
+	<-ch
+
+	g2 := getg()
+	if g1 != g2 {
+		panic("g1 != g2")
+	}
+
+	// Also test getg after some control flow, as the
+	// backend is sensitive to control flow.
+	g3 := getg()
+	if g1 != g3 {
+		panic("g1 != g3")
+	}
 }

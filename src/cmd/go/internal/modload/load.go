@@ -33,8 +33,7 @@ import (
 
 // buildList is the list of modules to use for building packages.
 // It is initialized by calling ImportPaths, ImportFromFiles,
-// ModulePackages, LoadALL, or LoadBuildList, each of which uses
-// loaded.load.
+// LoadALL, or LoadBuildList, each of which uses loaded.load.
 //
 // Ideally, exactly ONE of those functions would be called,
 // and exactly once. Most of the time, that's true.
@@ -52,15 +51,19 @@ var buildList []module.Version
 var loaded *loader
 
 // ImportPaths returns the set of packages matching the args (patterns),
-// adding modules to the build list as needed to satisfy new imports.
+// on the target platform. Modules may be added to the build list
+// to satisfy new imports.
 func ImportPaths(patterns []string) []*search.Match {
-	matches := ImportPathsQuiet(patterns)
+	matches := ImportPathsQuiet(patterns, imports.Tags())
 	search.WarnUnmatched(matches)
 	return matches
 }
 
-// ImportPathsQuiet is like ImportPaths but does not warn about patterns with no matches.
-func ImportPathsQuiet(patterns []string) []*search.Match {
+// ImportPathsQuiet is like ImportPaths but does not warn about patterns with
+// no matches. It also lets the caller specify a set of build tags to match
+// packages. The build tags should typically be imports.Tags() or
+// imports.AnyTags(); a nil map has no special meaning.
+func ImportPathsQuiet(patterns []string, tags map[string]bool) []*search.Match {
 	var fsDirs [][]string
 	updateMatches := func(matches []*search.Match, iterating bool) {
 		for i, m := range matches {
@@ -97,11 +100,31 @@ func ImportPathsQuiet(patterns []string) []*search.Match {
 						dir = filepath.Clean(dir)
 					}
 
+					// golang.org/issue/32917: We should resolve a relative path to a
+					// package path only if the relative path actually contains the code
+					// for that package.
+					if !dirContainsPackage(dir) {
+						// If we're outside of a module, ensure that the failure mode
+						// indicates that.
+						ModRoot()
+
+						// If the directory is local but does not exist, don't return it
+						// while loader is iterating, since this might trigger a fetch.
+						// After loader is done iterating, we still need to return the
+						// path, so that "go list -e" produces valid output.
+						if !iterating {
+							// We don't have a valid path to resolve to, so report the
+							// unresolved path.
+							m.Pkgs = append(m.Pkgs, pkg)
+						}
+						continue
+					}
+
 					// Note: The checks for @ here are just to avoid misinterpreting
 					// the module cache directories (formerly GOPATH/src/mod/foo@v1.5.2/bar).
 					// It's not strictly necessary but helpful to keep the checks.
 					if modRoot != "" && dir == modRoot {
-						pkg = Target.Path
+						pkg = targetPrefix
 					} else if modRoot != "" && strings.HasPrefix(dir, modRoot+string(filepath.Separator)) && !strings.Contains(dir[len(modRoot):], "@") {
 						suffix := filepath.ToSlash(dir[len(modRoot):])
 						if strings.HasPrefix(suffix, "/vendor/") {
@@ -118,7 +141,13 @@ func ImportPathsQuiet(patterns []string) []*search.Match {
 								continue
 							}
 						} else {
-							pkg = Target.Path + suffix
+							modPkg := targetPrefix + suffix
+							if _, ok := dirInModule(modPkg, targetPrefix, modRoot, true); ok {
+								pkg = modPkg
+							} else if !iterating {
+								ModRoot()
+								base.Errorf("go: directory %s is outside main module", base.ShortPath(dir))
+							}
 						}
 					} else if sub := search.InDir(dir, cfg.GOROOTsrc); sub != "" && sub != "." && !strings.Contains(sub, "@") {
 						pkg = filepath.ToSlash(sub)
@@ -129,16 +158,6 @@ func ImportPathsQuiet(patterns []string) []*search.Match {
 						if !iterating {
 							ModRoot()
 							base.Errorf("go: directory %s outside available modules", base.ShortPath(dir))
-						}
-					}
-					info, err := os.Stat(dir)
-					if err != nil || !info.IsDir() {
-						// If the directory is local but does not exist, don't return it
-						// while loader is iterating, since this would trigger a fetch.
-						// After loader is done iterating, we still need to return the
-						// path, so that "go list -e" produces valid output.
-						if iterating {
-							continue
 						}
 					}
 					m.Pkgs = append(m.Pkgs, pkg)
@@ -170,81 +189,6 @@ func ImportPathsQuiet(patterns []string) []*search.Match {
 		}
 	}
 
-	return loadPatterns(patterns, true, updateMatches)
-}
-
-// ModulePackages returns packages provided by each module in patterns.
-// patterns may contain module paths, patterns matching module paths,
-// "all" (interpreted as package pattern "all"), and "." (interpreted
-// as the main module). Additional modules (including modules providing
-// dependencies) may be added to the build list or upgraded.
-func ModulePackages(patterns []string) []*search.Match {
-	updateMatches := func(matches []*search.Match, iterating bool) {
-		for _, m := range matches {
-			switch {
-			case search.IsRelativePath(m.Pattern) || filepath.IsAbs(m.Pattern):
-				if m.Pattern != "." {
-					base.Errorf("go: path %s is not a module", m.Pattern)
-					continue
-				}
-				m.Pkgs = matchPackages("...", loaded.tags, false, []module.Version{Target})
-
-			case strings.Contains(m.Pattern, "..."):
-				match := search.MatchPattern(m.Pattern)
-				var matched []module.Version
-				for _, mod := range buildList {
-					if match(mod.Path) || str.HasPathPrefix(m.Pattern, mod.Path) {
-						matched = append(matched, mod)
-					}
-				}
-				m.Pkgs = matchPackages(m.Pattern, loaded.tags, false, matched)
-
-			case m.Pattern == "all":
-				loaded.testAll = true
-				if iterating {
-					// Enumerate the packages in the main module.
-					// We'll load the dependencies as we find them.
-					m.Pkgs = matchPackages("...", loaded.tags, false, []module.Version{Target})
-				} else {
-					// Starting with the packages in the main module,
-					// enumerate the full list of "all".
-					m.Pkgs = loaded.computePatternAll(m.Pkgs)
-				}
-
-			default:
-				found := false
-				for _, mod := range buildList {
-					if mod.Path == m.Pattern {
-						found = true
-						m.Pkgs = matchPackages("...", loaded.tags, false, []module.Version{mod})
-						break
-					}
-				}
-				if !found {
-					base.Errorf("go %s: module not in build list", m.Pattern)
-				}
-			}
-		}
-	}
-	return loadPatterns(patterns, false, updateMatches)
-}
-
-// loadPatterns returns a set of packages matching the args (patterns),
-// adding modules to the build list as needed to satisfy new imports.
-//
-// useTags indicates whether to use the default build constraints to
-// filter source files. If useTags is false, only "ignore" and malformed
-// build tag requirements are considered false.
-//
-// The interpretation of patterns is determined by updateMatches, which will be
-// called repeatedly until the build list is finalized. updateMatches should
-// should store a list of matching packages in each search.Match when it is
-// called. The iterating parameter is true if the build list has not been
-// finalized yet.
-//
-// If errors are encountered, loadPatterns will print them and exit.
-// On success, loadPatterns will update the build list and write go.mod.
-func loadPatterns(patterns []string, useTags bool, updateMatches func(matches []*search.Match, iterating bool)) []*search.Match {
 	InitMod()
 
 	var matches []*search.Match
@@ -255,10 +199,7 @@ func loadPatterns(patterns []string, useTags bool, updateMatches func(matches []
 		})
 	}
 
-	loaded = newLoader()
-	if !useTags {
-		loaded.tags = anyTags
-	}
+	loaded = newLoader(tags)
 	loaded.load(func() []string {
 		var roots []string
 		updateMatches(matches, true)
@@ -322,14 +263,30 @@ func pathInModuleCache(dir string) string {
 	return ""
 }
 
-// warnPattern returns list, the result of matching pattern,
-// but if list is empty then first it prints a warning about
-// the pattern not matching any packages.
-func warnPattern(pattern string, list []string) []string {
-	if len(list) == 0 {
-		fmt.Fprintf(os.Stderr, "warning: %q matched no packages\n", pattern)
+var dirContainsPackageCache sync.Map // absolute dir → bool
+
+func dirContainsPackage(dir string) bool {
+	isPkg, ok := dirContainsPackageCache.Load(dir)
+	if !ok {
+		_, err := cfg.BuildContext.ImportDir(dir, 0)
+		if err == nil {
+			isPkg = true
+		} else {
+			if fi, statErr := os.Stat(dir); statErr != nil || !fi.IsDir() {
+				// A non-directory or inaccessible directory is not a Go package.
+				isPkg = false
+			} else if _, noGo := err.(*build.NoGoError); noGo {
+				// A directory containing no Go source files is not a Go package.
+				isPkg = false
+			} else {
+				// An error other than *build.NoGoError indicates that the package exists
+				// but has some other problem (such as a syntax error).
+				isPkg = true
+			}
+		}
+		isPkg, _ = dirContainsPackageCache.LoadOrStore(dir, isPkg)
 	}
-	return list
+	return isPkg.(bool)
 }
 
 // ImportFromFiles adds modules to the build list as needed
@@ -337,12 +294,13 @@ func warnPattern(pattern string, list []string) []string {
 func ImportFromFiles(gofiles []string) {
 	InitMod()
 
-	imports, testImports, err := imports.ScanFiles(gofiles, imports.Tags())
+	tags := imports.Tags()
+	imports, testImports, err := imports.ScanFiles(gofiles, tags)
 	if err != nil {
 		base.Fatalf("go: %v", err)
 	}
 
-	loaded = newLoader()
+	loaded = newLoader(tags)
 	loaded.load(func() []string {
 		var roots []string
 		roots = append(roots, imports...)
@@ -391,7 +349,7 @@ func LoadBuildList() []module.Version {
 }
 
 func ReloadBuildList() []module.Version {
-	loaded = newLoader()
+	loaded = newLoader(imports.Tags())
 	loaded.load(func() []string { return nil })
 	return buildList
 }
@@ -417,9 +375,8 @@ func LoadVendor() []string {
 func loadAll(testAll bool) []string {
 	InitMod()
 
-	loaded = newLoader()
+	loaded = newLoader(imports.AnyTags())
 	loaded.isALL = true
-	loaded.tags = anyTags
 	loaded.testAll = testAll
 	if !testAll {
 		loaded.testRoots = true
@@ -430,23 +387,21 @@ func loadAll(testAll bool) []string {
 
 	var paths []string
 	for _, pkg := range loaded.pkgs {
-		if e, ok := pkg.err.(*ImportMissingError); ok && e.Module.Path == "" {
-			continue // Package doesn't actually exist.
+		if pkg.err != nil {
+			base.Errorf("%s: %v", pkg.stackText(), pkg.err)
+			continue
 		}
 		paths = append(paths, pkg.path)
 	}
+	base.ExitIfErrors()
 	return paths
 }
-
-// anyTags is a special tags map that satisfies nearly all build tag expressions.
-// Only "ignore" and malformed build tag requirements are considered false.
-var anyTags = map[string]bool{"*": true}
 
 // TargetPackages returns the list of packages in the target (top-level) module
 // matching pattern, which may be relative to the working directory, under all
 // build tag settings.
 func TargetPackages(pattern string) []string {
-	return matchPackages(pattern, anyTags, false, []module.Version{Target})
+	return matchPackages(pattern, imports.AnyTags(), false, []module.Version{Target})
 }
 
 // BuildList returns the module build list,
@@ -589,9 +544,9 @@ type loader struct {
 // LoadTests controls whether the loaders load tests of the root packages.
 var LoadTests bool
 
-func newLoader() *loader {
+func newLoader(tags map[string]bool) *loader {
 	ld := new(loader)
-	ld.tags = imports.Tags()
+	ld.tags = tags
 	ld.testRoots = LoadTests
 
 	// Inside the "std" and "cmd" modules, we prefer to use the vendor directory
@@ -1172,18 +1127,20 @@ func (r *mvsReqs) required(mod module.Version) ([]module.Version, error) {
 
 	data, err := modfetch.GoMod(mod.Path, mod.Version)
 	if err != nil {
-		return nil, fmt.Errorf("%s@%s: %v", mod.Path, mod.Version, err)
+		return nil, err
 	}
 	f, err := modfile.ParseLax("go.mod", data, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s@%s: parsing go.mod: %v", mod.Path, mod.Version, err)
+		return nil, module.VersionError(mod, fmt.Errorf("parsing go.mod: %v", err))
 	}
 
 	if f.Module == nil {
-		return nil, fmt.Errorf("%s@%s: parsing go.mod: missing module line", mod.Path, mod.Version)
+		return nil, module.VersionError(mod, errors.New("parsing go.mod: missing module line"))
 	}
 	if mpath := f.Module.Mod.Path; mpath != origPath && mpath != mod.Path {
-		return nil, fmt.Errorf("%s@%s: parsing go.mod: unexpected module path %q", mod.Path, mod.Version, mpath)
+		return nil, module.VersionError(mod, fmt.Errorf(`parsing go.mod:
+	module declares its path as: %s
+	        but was required as: %s`, mod.Path, mpath))
 	}
 	if f.Go != nil {
 		r.versions.LoadOrStore(mod, f.Go.Version)
@@ -1208,11 +1165,15 @@ func (*mvsReqs) Upgrade(m module.Version) (module.Version, error) {
 func versions(path string) ([]string, error) {
 	// Note: modfetch.Lookup and repo.Versions are cached,
 	// so there's no need for us to add extra caching here.
-	repo, err := modfetch.Lookup(path)
-	if err != nil {
-		return nil, err
-	}
-	return repo.Versions("")
+	var versions []string
+	err := modfetch.TryProxies(func(proxy string) error {
+		repo, err := modfetch.Lookup(proxy, path)
+		if err == nil {
+			versions, err = repo.Versions("")
+		}
+		return err
+	})
+	return versions, err
 }
 
 // Previous returns the tagged version of m.Path immediately prior to

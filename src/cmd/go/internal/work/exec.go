@@ -211,6 +211,9 @@ func (b *Builder) buildActionID(a *Action) cache.ActionID {
 	fmt.Fprintf(h, "goos %s goarch %s\n", cfg.Goos, cfg.Goarch)
 	fmt.Fprintf(h, "import %q\n", p.ImportPath)
 	fmt.Fprintf(h, "omitdebug %v standard %v local %v prefix %q\n", p.Internal.OmitDebug, p.Standard, p.Internal.Local, p.Internal.LocalPrefix)
+	if cfg.BuildTrimpath {
+		fmt.Fprintln(h, "trimpath")
+	}
 	if p.Internal.ForceLibrary {
 		fmt.Fprintf(h, "forcelibrary\n")
 	}
@@ -537,15 +540,6 @@ func (b *Builder) build(a *Action) (err error) {
 				cgofiles[i-len(gofiles)] = coverFile
 			}
 		}
-	}
-
-	// Write out the _testinginit.go file for any test packages that import "testing".
-	if a.Package.Internal.TestinginitGo != nil {
-		initfile := objdir + "_testinginit.go"
-		if err := b.writeFile(initfile, a.Package.Internal.TestinginitGo); err != nil {
-			return err
-		}
-		gofiles = append([]string{initfile}, gofiles...)
 	}
 
 	// Run cgo.
@@ -1116,6 +1110,9 @@ func (b *Builder) linkActionID(a *Action) cache.ActionID {
 	fmt.Fprintf(h, "buildmode %s goos %s goarch %s\n", cfg.BuildBuildmode, cfg.Goos, cfg.Goarch)
 	fmt.Fprintf(h, "import %q\n", p.ImportPath)
 	fmt.Fprintf(h, "omitdebug %v standard %v local %v prefix %q\n", p.Internal.OmitDebug, p.Standard, p.Internal.Local, p.Internal.LocalPrefix)
+	if cfg.BuildTrimpath {
+		fmt.Fprintln(h, "trimpath")
+	}
 
 	// Toolchain-dependent configuration, shared with b.linkSharedActionID.
 	b.printLinkerConfig(h, p)
@@ -1674,25 +1671,6 @@ func (b *Builder) writeFile(file string, text []byte) error {
 		return nil
 	}
 	return ioutil.WriteFile(file, text, 0666)
-}
-
-// appendFile appends the text to file.
-func (b *Builder) appendFile(file string, text []byte) error {
-	if cfg.BuildN || cfg.BuildX {
-		b.Showcmd("", "cat >>%s << 'EOF' # internal\n%sEOF", file, text)
-	}
-	if cfg.BuildN {
-		return nil
-	}
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if _, err = f.Write(text); err != nil {
-		return err
-	}
-	return f.Close()
 }
 
 // Install the cgo export header file, if there is one.
@@ -2554,8 +2532,7 @@ func (b *Builder) cgo(a *Action, cgoExe, objdir string, pcCFLAGS, pcLDFLAGS, cgo
 	}
 
 	if cfg.BuildToolchainName == "gccgo" {
-		switch cfg.Goarch {
-		case "386", "amd64":
+		if b.gccSupportsFlag([]string{BuildToolchain.compiler()}, "-fsplit-stack") {
 			cgoCFLAGS = append(cgoCFLAGS, "-fsplit-stack")
 		}
 		cgoflags = append(cgoflags, "-gccgo")

@@ -31,16 +31,14 @@ func renameinit() *types.Sym {
 //   2) Initialize all the variables that have initializers.
 //   3) Run any init functions.
 func fninit(n []*Node) {
-	nf := initfix(n)
+	nf := initOrder(n)
 
 	var deps []*obj.LSym // initTask records for packages the current package depends on
 	var fns []*obj.LSym  // functions to call for package initialization
 
 	// Find imported packages with init tasks.
-	for _, p := range types.ImportedPkgList() {
-		if s, ok := p.LookupOK(".inittask"); ok {
-			deps = append(deps, s.Linksym())
-		}
+	for _, s := range types.InitSyms {
+		deps = append(deps, s.Linksym())
 	}
 
 	// Make a function that contains all the initialization statements.

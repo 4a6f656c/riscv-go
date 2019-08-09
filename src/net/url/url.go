@@ -13,7 +13,6 @@ package url
 import (
 	"errors"
 	"fmt"
-	"internal/oserror"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,10 +25,22 @@ type Error struct {
 	Err error
 }
 
-func (e *Error) Unwrap() error   { return e.Err }
-func (e *Error) Error() string   { return e.Op + " " + e.URL + ": " + e.Err.Error() }
-func (e *Error) Timeout() bool   { return oserror.IsTimeout(e.Err) }
-func (e *Error) Temporary() bool { return oserror.IsTemporary(e.Err) }
+func (e *Error) Unwrap() error { return e.Err }
+func (e *Error) Error() string { return e.Op + " " + e.URL + ": " + e.Err.Error() }
+
+func (e *Error) Timeout() bool {
+	t, ok := e.Err.(interface {
+		Timeout() bool
+	})
+	return ok && t.Timeout()
+}
+
+func (e *Error) Temporary() bool {
+	t, ok := e.Err.(interface {
+		Temporary() bool
+	})
+	return ok && t.Temporary()
+}
 
 func ishex(c byte) bool {
 	switch {
@@ -337,10 +348,11 @@ func escape(s string, mode encoding) string {
 // Note that the Path field is stored in decoded form: /%47%6f%2f becomes /Go/.
 // A consequence is that it is impossible to tell which slashes in the Path were
 // slashes in the raw URL and which were %2f. This distinction is rarely important,
-// but when it is, code must not use Path directly.
-// The Parse function sets both Path and RawPath in the URL it returns,
-// and URL's String method uses RawPath if it is a valid encoding of Path,
-// by calling the EscapedPath method.
+// but when it is, the code should use RawPath, an optional field which only gets
+// set if the default encoding is different from Path.
+//
+// URL's String method uses the EscapedPath method to obtain the path. See the
+// EscapedPath method for more details.
 type URL struct {
 	Scheme     string
 	Opaque     string    // encoded opaque data

@@ -84,6 +84,21 @@ TEXT runtime·write_trampoline(SB),NOSPLIT,$0
 	POPL	BP
 	RET
 
+TEXT runtime·pipe_trampoline(SB),NOSPLIT,$0
+	PUSHL	BP
+	MOVL	SP, BP
+	SUBL	$8, SP
+	MOVL	16(SP), AX		// arg 1 pipefd
+	MOVL	AX, 0(SP)
+	CALL	libc_pipe(SB)
+	TESTL	AX, AX
+	JEQ	3(PC)
+	CALL	libc_error(SB)		// return negative errno value
+	NEGL	AX
+	MOVL	BP, SP
+	POPL	BP
+	RET
+
 TEXT runtime·mmap_trampoline(SB),NOSPLIT,$0
 	PUSHL	BP
 	MOVL	SP, BP
@@ -474,7 +489,7 @@ TEXT runtime·pthread_attr_init_trampoline(SB),NOSPLIT,$0
 	POPL	BP
 	RET
 
-TEXT runtime·pthread_attr_setstacksize_trampoline(SB),NOSPLIT,$0
+TEXT runtime·pthread_attr_getstacksize_trampoline(SB),NOSPLIT,$0
 	PUSHL	BP
 	MOVL	SP, BP
 	SUBL	$8, SP
@@ -483,7 +498,7 @@ TEXT runtime·pthread_attr_setstacksize_trampoline(SB),NOSPLIT,$0
 	MOVL	AX, 0(SP)
 	MOVL	4(CX), AX	// arg 2 size
 	MOVL	AX, 4(SP)
-	CALL	libc_pthread_attr_setstacksize(SB)
+	CALL	libc_pthread_attr_getstacksize(SB)
 	MOVL	BP, SP
 	POPL	BP
 	RET

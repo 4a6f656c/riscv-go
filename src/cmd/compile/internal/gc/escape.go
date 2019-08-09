@@ -614,9 +614,14 @@ func (e *Escape) unsafeValue(k EscHole, n *Node) {
 		}
 	case OPLUS, ONEG, OBITNOT:
 		e.unsafeValue(k, n.Left)
-	case OADD, OSUB, OOR, OXOR, OMUL, ODIV, OMOD, OLSH, ORSH, OAND, OANDNOT:
+	case OADD, OSUB, OOR, OXOR, OMUL, ODIV, OMOD, OAND, OANDNOT:
 		e.unsafeValue(k, n.Left)
 		e.unsafeValue(k, n.Right)
+	case OLSH, ORSH:
+		e.unsafeValue(k, n.Left)
+		// RHS need not be uintptr-typed (#32959) and can't meaningfully
+		// flow pointers anyway.
+		e.discard(n.Right)
 	default:
 		e.exprSkipInit(e.discardHole(), n)
 	}
@@ -882,6 +887,7 @@ func (e *Escape) augmentParamHole(k EscHole, where *Node) EscHole {
 	// non-transient location to avoid arguments from being
 	// transiently allocated.
 	if where.Op == ODEFER && e.loopDepth == 1 {
+		where.Esc = EscNever // force stack allocation of defer record (see ssa.go)
 		// TODO(mdempsky): Eliminate redundant EscLocation allocs.
 		return e.teeHole(k, e.newLoc(nil, false).asHole())
 	}
