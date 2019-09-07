@@ -931,6 +931,7 @@ const (
 	OpARMNEGF
 	OpARMNEGD
 	OpARMSQRTD
+	OpARMABSD
 	OpARMCLZ
 	OpARMREV
 	OpARMREV16
@@ -941,6 +942,7 @@ const (
 	OpARMSRLconst
 	OpARMSRA
 	OpARMSRAconst
+	OpARMSRR
 	OpARMSRRconst
 	OpARMADDshiftLL
 	OpARMADDshiftRL
@@ -1638,6 +1640,7 @@ const (
 	OpMIPS64CALLclosure
 	OpMIPS64CALLinter
 	OpMIPS64DUFFZERO
+	OpMIPS64DUFFCOPY
 	OpMIPS64LoweredZero
 	OpMIPS64LoweredMove
 	OpMIPS64LoweredAtomicLoad8
@@ -2271,6 +2274,7 @@ const (
 	OpWasmF64Copysign
 	OpWasmI64Ctz
 	OpWasmI64Clz
+	OpWasmI32Rotl
 	OpWasmI64Rotl
 	OpWasmI64Popcnt
 
@@ -12405,6 +12409,19 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
+		name:   "ABSD",
+		argLen: 1,
+		asm:    arm.AABSD,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 4294901760}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15
+			},
+			outputs: []outputInfo{
+				{0, 4294901760}, // F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15
+			},
+		},
+	},
+	{
 		name:   "CLZ",
 		argLen: 1,
 		asm:    arm.ACLZ,
@@ -12534,6 +12551,19 @@ var opcodeTable = [...]opInfo{
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 22527}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 g R12 R14
+			},
+			outputs: []outputInfo{
+				{0, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14
+			},
+		},
+	},
+	{
+		name:   "SRR",
+		argLen: 2,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 22527}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 g R12 R14
+				{1, 22527}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 g R12 R14
 			},
 			outputs: []outputInfo{
 				{0, 21503}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R12 R14
@@ -21847,6 +21877,20 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
+		name:           "DUFFCOPY",
+		auxType:        auxInt64,
+		argLen:         3,
+		faultOnNilArg0: true,
+		faultOnNilArg1: true,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 4}, // R2
+				{1, 2}, // R1
+			},
+			clobbers: 134217734, // R1 R2 R31
+		},
+	},
+	{
 		name:           "LoweredZero",
 		auxType:        auxInt64,
 		argLen:         3,
@@ -30573,6 +30617,20 @@ var opcodeTable = [...]opInfo{
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 4295032831}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 SP
+			},
+			outputs: []outputInfo{
+				{0, 65535}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15
+			},
+		},
+	},
+	{
+		name:   "I32Rotl",
+		argLen: 2,
+		asm:    wasm.AI32Rotl,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 4295032831}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 SP
+				{1, 4295032831}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 SP
 			},
 			outputs: []outputInfo{
 				{0, 65535}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15
