@@ -371,7 +371,6 @@ const (
 	ABaseMIPS
 	ABaseRISCV
 	ABaseS390X
-	ABaseRISCV
 	ABaseWasm
 
 	AllowedOpCodes = 1 << 11            // The number of opcodes available for any given architecture.

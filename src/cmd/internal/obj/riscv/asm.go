@@ -302,8 +302,8 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 			p.As = AECALL
 		}
 
-		i, ok := encode(p.As)
-		if !ok {
+		i := encode(p.As)
+		if i == nil {
 			panic("progedit: tried to rewrite nonexistent instruction")
 		}
 		p.From.Type = obj.TYPE_CONST
@@ -1367,8 +1367,8 @@ func validateRFF(p *obj.Prog) {
 }
 
 func encodeR(p *obj.Prog, rs1 uint32, rs2 uint32, rd uint32) uint32 {
-	i, ok := encode(p.As)
-	if !ok {
+	i := encode(p.As)
+	if i == nil {
 		panic("encodeR: could not encode instruction")
 	}
 	if i.rs2 != 0 && rs2 != 0 {
@@ -1419,8 +1419,8 @@ func validateIF(p *obj.Prog) {
 func encodeI(p *obj.Prog, rd uint32) uint32 {
 	imm := immi(p.From, 12)
 	rs1 := regi(*p.GetFrom3())
-	i, ok := encode(p.As)
-	if !ok {
+	i := encode(p.As)
+	if i == nil {
 		panic("encodeI: could not encode instruction")
 	}
 	imm |= uint32(i.csr)
@@ -1458,8 +1458,8 @@ func EncodeSImmediate(imm int64) (int64, error) {
 func encodeS(p *obj.Prog, rs2 uint32) uint32 {
 	imm := immi(p.From, 12)
 	rs1 := regi(p.To)
-	i, ok := encode(p.As)
-	if !ok {
+	i := encode(p.As)
+	if i == nil {
 		panic("encodeS: could not encode instruction")
 	}
 	return (imm>>5)<<25 |
@@ -1491,8 +1491,8 @@ func encodeSB(p *obj.Prog) uint32 {
 	imm := immi(p.To, 13)
 	rs2 := regval(p.Reg, REG_X0, REG_X31)
 	rs1 := regi(p.From)
-	i, ok := encode(p.As)
-	if !ok {
+	i := encode(p.As)
+	if i == nil {
 		panic("encodeSB: could not encode instruction")
 	}
 	return (imm>>12)<<31 |
@@ -1524,8 +1524,8 @@ func encodeU(p *obj.Prog) uint32 {
 	// instead accept just the top bits.
 	imm := immi(p.From, 20)
 	rd := regi(p.To)
-	i, ok := encode(p.As)
-	if !ok {
+	i := encode(p.As)
+	if i == nil {
 		panic("encodeU: could not encode instruction")
 	}
 	return imm<<12 | rd<<7 | i.opcode
@@ -1574,8 +1574,8 @@ func EncodeUJImmediate(imm int64) (uint32, error) {
 func encodeUJ(p *obj.Prog) uint32 {
 	imm := encodeUJImmediate(immi(p.To, 21))
 	rd := regi(p.From)
-	i, ok := encode(p.As)
-	if !ok {
+	i := encode(p.As)
+	if i == nil {
 		panic("encodeUJ: could not encode instruction")
 	}
 	return imm | rd<<7 | i.opcode
@@ -1656,7 +1656,7 @@ var (
 // Instructions are masked with obj.AMask to keep indices small.
 // TODO: merge this with the encoding table in inst.go.
 // TODO: add other useful per-As info, like whether it is a branch (used in preprocess).
-var encodingForAs = [...]encoding{
+var encodingForAs = [ALAST&obj.AMask]encoding{
 	// 2.5: Control Transfer Instructions
 	AJAL & obj.AMask:  ujEncoding,
 	AJALR & obj.AMask: iIEncoding,
@@ -1798,7 +1798,7 @@ func encodingForP(p *obj.Prog) encoding {
 		p.Ctxt.Diag("encodingForP: not a RISC-V instruction %s", p.As)
 		return badEncoding
 	}
-	as := p.As & obj.AMask
+	as := int(p.As) & obj.AMask
 	if int(as) >= len(encodingForAs) {
 		p.Ctxt.Diag("encodingForP: bad RISC-V instruction %s", p.As)
 		return badEncoding

@@ -93,8 +93,8 @@ TEXT runtime·closefd(SB),NOSPLIT|NOFRAME,$0-12
 	MOVW	A0, ret+8(FP)
 	RET
 
-// func write(fd uintptr, p unsafe.Pointer, n int32) int32
-TEXT runtime·write(SB),NOSPLIT|NOFRAME,$0-28
+// func write1(fd uintptr, p unsafe.Pointer, n int32) int32
+TEXT runtime·write1(SB),NOSPLIT|NOFRAME,$0-28
 	MOV	fd+0(FP), A0
 	MOV	p+8(FP), A1
 	MOVW	n+16(FP), A2
@@ -190,8 +190,8 @@ TEXT runtime·mincore(SB),NOSPLIT|NOFRAME,$0-28
 	MOVW	A0, ret+24(FP)
 	RET
 
-// func walltime() (sec int64, nsec int32)
-TEXT runtime·walltime(SB),NOSPLIT,$24-12
+// func walltime1() (sec int64, nsec int32)
+TEXT runtime·walltime1(SB),NOSPLIT,$24-12
 	MOV	$0, A0 // CLOCK_REALTIME
 	MOV	$8(X2), A1
 	MOV	$SYS_clock_gettime, A7
@@ -202,8 +202,8 @@ TEXT runtime·walltime(SB),NOSPLIT,$24-12
 	MOVW	T1, nsec+8(FP)
 	RET
 
-// func nanotime() int64
-TEXT runtime·nanotime(SB),NOSPLIT,$24-8
+// func nanotime1() int64
+TEXT runtime·nanotime1(SB),NOSPLIT,$24-8
 	MOV	$1, A0 // CLOCK_MONOTONIC
 	MOV	$8(X2), A1
 	MOV	$SYS_clock_gettime, A7
