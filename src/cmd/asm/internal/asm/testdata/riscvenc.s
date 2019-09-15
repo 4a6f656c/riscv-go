@@ -6,6 +6,10 @@
 
 TEXT asmtest(SB),DUPOK|NOSPLIT,$0
 start:
+	// Arbitrary bytes (entered in little-endian mode)
+	WORD	$0x12345678	// WORD $305419896	// 78563412
+	WORD	$0x9abcdef0	// WORD $2596069104	// f0debc9a
+
 	ADD	T1, T0, T2			// b3836200
 	ADD	T0, T1				// 33035300
 	ADD	$2047, T0, T1			// 1383f27f
@@ -116,11 +120,6 @@ start:
 
 	SEQZ	A5, A5				// 93b71700
 	SNEZ	A5, A5				// b337f000
-
-	// Arbitrary bytes (entered in little-endian mode)
-	WORD	$0x12345678	// WORD $305419896	// 78563412
-	WORD	$0x9abcdef0	// WORD $2596069104	// f0debc9a
-
 
 	// M extension
 	MUL	T0, T1, T2			// b3035302

@@ -43,12 +43,15 @@ import (
 	"fmt"
 )
 
+// TODO(jsing): Populate.
 var RISCV64DWARFRegisters = map[int16]int16{}
 
 func init() {
 	// XXX - fix this.
 	RISCV64DWARFRegisters[1] = 2
 }
+
+func buildop(ctxt *obj.Link) {}
 
 // stackOffset updates Addr offsets based on the current stack size.
 //
@@ -352,12 +355,12 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 	}
 }
 
-// setpcs sets the Pc field in all instructions reachable from p.  It uses pc as
-// the initial value.
-func setpcs(p *obj.Prog, pc int64) {
+// setPCs sets the Pc field in all instructions reachable from p.
+// It uses pc as the initial value.
+func setPCs(p *obj.Prog, pc int64) {
 	for ; p != nil; p = p.Link {
 		p.Pc = pc
-		pc += encodingForP(p).length
+		pc += int64(encodingForProg(p).length)
 	}
 }
 
@@ -972,7 +975,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	// a fixed point will be reached).  No attempt to handle functions > 2GiB.
 	for {
 		rescan := false
-		setpcs(cursym.Func.Text, 0)
+		setPCs(cursym.Func.Text, 0)
 		for p := cursym.Func.Text; p != nil; p = p.Link {
 			switch p.As {
 			case ABEQ, ABNE, ABLT, ABGE, ABLTU, ABGEU:
@@ -1583,8 +1586,8 @@ func encodeUJ(p *obj.Prog) uint32 {
 }
 
 func validateRaw(p *obj.Prog) {
-	// Treat the raw value specially as a 32-bit unsigned integer. Nobody
-	// wants to enter negative machine code.
+	// Treat the raw value specially as a 32-bit unsigned integer.
+	// Nobody wants to enter negative machine code.
 	a := p.From
 	if a.Type != obj.TYPE_CONST {
 		p.Ctxt.Diag("%v\texpected immediate in raw position but got %s", p, obj.Dconv(p, &a))
@@ -1596,8 +1599,8 @@ func validateRaw(p *obj.Prog) {
 }
 
 func encodeRaw(p *obj.Prog) uint32 {
-	// Treat the raw value specially as a 32-bit unsigned integer. Nobody
-	// wants to enter negative machine code.
+	// Treat the raw value specially as a 32-bit unsigned integer.
+	// Nobody wants to enter negative machine code.
 	a := p.From
 	if a.Type != obj.TYPE_CONST {
 		panic(fmt.Sprintf("ill typed: %+v", a))
@@ -1611,7 +1614,7 @@ func encodeRaw(p *obj.Prog) uint32 {
 type encoding struct {
 	encode   func(*obj.Prog) uint32 // encode returns the machine code for a Prog
 	validate func(*obj.Prog)        // validate validates a Prog, calling ctxt.Diag for any issues
-	length   int64                  // length of encoded instruction; 0 for pseudo-ops, 4 otherwise
+	length   int                    // length of encoded instruction; 0 for pseudo-ops, 4 otherwise
 }
 
 var (
@@ -1793,8 +1796,8 @@ var encodingForAs = [ALAST & obj.AMask]encoding{
 	obj.ANOP:      pseudoOpEncoding,
 }
 
-// encodingForP returns the encoding (encode+validate funcs) for a Prog.
-func encodingForP(p *obj.Prog) encoding {
+// encodingForProg returns the encoding (encode+validate funcs) for an *obj.Prog.
+func encodingForProg(p *obj.Prog) encoding {
 	if base := p.As &^ obj.AMask; base != obj.ABaseRISCV && base != 0 {
 		p.Ctxt.Diag("encodingForP: not a RISC-V instruction %s", p.As)
 		return badEncoding
@@ -1806,7 +1809,7 @@ func encodingForP(p *obj.Prog) encoding {
 	}
 	enc := encodingForAs[as]
 	if enc.validate == nil {
-		p.Ctxt.Diag("encodingForP: no encoding for instruction %s", p.As)
+		p.Ctxt.Diag("encodingForProg: no encoding for instruction %s", p.As)
 		return badEncoding
 	}
 	return enc
@@ -1857,7 +1860,7 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			rel.Type = t
 		}
 
-		enc := encodingForP(p)
+		enc := encodingForProg(p)
 		if enc.length > 0 {
 			symcode = append(symcode, enc.encode(p))
 		}
@@ -1868,10 +1871,6 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	for p, i := cursym.P, 0; i < len(symcode); p, i = p[4:], i+1 {
 		ctxt.Arch.ByteOrder.PutUint32(p, symcode[i])
 	}
-}
-
-func buildop(ctxt *obj.Link) {
-	// XXX
 }
 
 var LinkRISCV64 = obj.LinkArch{

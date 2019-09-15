@@ -100,10 +100,8 @@ func resolve(n *Node) (res *Node) {
 	}
 
 	if r.Op == OIOTA {
-		if i := len(typecheckdefstack); i > 0 {
-			if x := typecheckdefstack[i-1]; x.Op == OLITERAL {
-				return nodintconst(x.Iota())
-			}
+		if x := getIotaValue(); x >= 0 {
+			return nodintconst(x)
 		}
 		return n
 	}
@@ -1407,20 +1405,18 @@ func typecheck1(n *Node, top int) (res *Node) {
 		}
 
 		// Determine result type.
-		et := t.Etype
-		switch et {
+		switch t.Etype {
 		case TIDEAL:
-			// result is ideal
+			n.Type = types.Idealfloat
 		case TCOMPLEX64:
-			et = TFLOAT32
+			n.Type = types.Types[TFLOAT32]
 		case TCOMPLEX128:
-			et = TFLOAT64
+			n.Type = types.Types[TFLOAT64]
 		default:
 			yyerror("invalid argument %L for %v", l, n.Op)
 			n.Type = nil
 			return n
 		}
-		n.Type = types.Types[et]
 
 	case OCOMPLEX:
 		ok |= ctxExpr
@@ -1457,7 +1453,7 @@ func typecheck1(n *Node, top int) (res *Node) {
 			return n
 
 		case TIDEAL:
-			t = types.Types[TIDEAL]
+			t = types.Idealcomplex
 
 		case TFLOAT32:
 			t = types.Types[TCOMPLEX64]
@@ -2683,20 +2679,20 @@ func errorDetails(nl Nodes, tstruct *types.Type, isddd bool) string {
 // e.g in error messages about wrong arguments to return.
 func sigrepr(t *types.Type) string {
 	switch t {
-	default:
-		return t.String()
-
-	case types.Types[TIDEAL]:
-		// "untyped number" is not commonly used
-		// outside of the compiler, so let's use "number".
-		return "number"
-
 	case types.Idealstring:
 		return "string"
-
 	case types.Idealbool:
 		return "bool"
 	}
+
+	if t.Etype == TIDEAL {
+		// "untyped number" is not commonly used
+		// outside of the compiler, so let's use "number".
+		// TODO(mdempsky): Revisit this.
+		return "number"
+	}
+
+	return t.String()
 }
 
 // retsigerr returns the signature of the types
@@ -3936,4 +3932,20 @@ func setTypeNode(n *Node, t *types.Type) {
 	n.Op = OTYPE
 	n.Type = t
 	n.Type.Nod = asTypesNode(n)
+}
+
+// getIotaValue returns the current value for "iota",
+// or -1 if not within a ConstSpec.
+func getIotaValue() int64 {
+	if i := len(typecheckdefstack); i > 0 {
+		if x := typecheckdefstack[i-1]; x.Op == OLITERAL {
+			return x.Iota()
+		}
+	}
+
+	if Curfn != nil && Curfn.Iota() >= 0 {
+		return Curfn.Iota()
+	}
+
+	return -1
 }

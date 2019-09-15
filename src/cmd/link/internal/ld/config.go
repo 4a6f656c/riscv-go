@@ -229,6 +229,7 @@ func mustLinkExternal(ctxt *Link) (res bool, reason string) {
 // flag and the iscgo externalobj variables are set.
 func determineLinkMode(ctxt *Link) {
 	extNeeded, extReason := mustLinkExternal(ctxt)
+	via := ""
 
 	if ctxt.LinkMode == LinkAuto {
 		// The environment variable GO_EXTLINK_ENABLED controls the
@@ -237,18 +238,13 @@ func determineLinkMode(ctxt *Link) {
 		// cmd/link was compiled. (See make.bash.)
 		switch objabi.Getgoextlinkenabled() {
 		case "0":
-			if extNeeded {
-				Exitf("internal linking requested via GO_EXTLINK_ENABLED, but external linking required: %s", extReason)
-			}
 			ctxt.LinkMode = LinkInternal
+			via = "via GO_EXTLINK_ENABLED "
 		case "1":
 			ctxt.LinkMode = LinkExternal
+			via = "via GO_EXTLINK_ENABLED "
 		default:
-			if extNeeded {
-				ctxt.LinkMode = LinkExternal
-			} else if iscgo && externalobj {
-				ctxt.LinkMode = LinkExternal
-			} else if ctxt.BuildMode == BuildModePIE {
+			if extNeeded || (iscgo && externalobj) || ctxt.BuildMode == BuildModePIE {
 				ctxt.LinkMode = LinkExternal
 			} else {
 				ctxt.LinkMode = LinkInternal
@@ -259,7 +255,7 @@ func determineLinkMode(ctxt *Link) {
 	switch ctxt.LinkMode {
 	case LinkInternal:
 		if extNeeded {
-			Exitf("internal linking requested but external linking required: %s", extReason)
+			Exitf("internal linking requested %sbut external linking required: %s", via, extReason)
 		}
 	case LinkExternal:
 		switch {
