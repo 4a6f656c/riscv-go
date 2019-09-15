@@ -35,9 +35,9 @@ func zerorange(pp *gc.Progs, p *obj.Prog, off, cnt int64, _ *uint32) *obj.Prog {
 	// 	ADD	$Widthptr, T0
 	//	BNE	T0, T1, loop
 	p = pp.Appendpp(p, riscv.AADD, obj.TYPE_CONST, 0, off, obj.TYPE_REG, riscv.REG_T0, 0)
-	p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: riscv.REG_SP})
+	p.Reg = riscv.REG_SP
 	p = pp.Appendpp(p, riscv.AADD, obj.TYPE_CONST, 0, cnt, obj.TYPE_REG, riscv.REG_T1, 0)
-	p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: riscv.REG_T0})
+	p.Reg = riscv.REG_T0 // XXX
 	p = pp.Appendpp(p, riscv.AMOV, obj.TYPE_REG, riscv.REG_ZERO, 0, obj.TYPE_MEM, riscv.REG_T0, 0)
 	loop := p
 	p = pp.Appendpp(p, riscv.AADD, obj.TYPE_CONST, 0, int64(gc.Widthptr), obj.TYPE_REG, riscv.REG_T0, 0)

@@ -98,18 +98,15 @@ func lowerjalr(p *obj.Prog) {
 	// JALR gets parsed like JAL--the linkage pointer goes in From, and the
 	// target is in To.  However, we need to assemble it as an I-type
 	// instruction--the linkage pointer will go in To, the target register
-	// in From3, and the offset in From.
+	// in Reg, and the offset in From.
 	//
 	// TODO(bbaren): Handle sym, symkind, index, and scale.
-	p.From, *p.GetFrom3(), p.To = p.To, p.To, p.From
+	p.Reg = p.To.Reg
+	p.From, p.To = p.To, p.From
 
 	// Reset Reg so the string looks correct.
 	p.From.Type = obj.TYPE_CONST
 	p.From.Reg = obj.REG_NONE
-
-	// Reset Offset so the string looks correct.
-	p.GetFrom3().Type = obj.TYPE_REG
-	p.GetFrom3().Offset = 0
 }
 
 // jalrToSym replaces p with a set of Progs needed to jump to the Sym in p.
@@ -132,14 +129,14 @@ func jalrToSym(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc, lr int16) *ob
 	// This offset isn't really encoded with either instruction. It will be
 	// extracted for a relocation later.
 	p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: to.Offset, Sym: to.Sym}
-	p.SetFrom3(obj.Addr{})
+	p.Reg = 0
 	p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 	p.Mark |= NEED_PCREL_ITYPE_RELOC
 	p = obj.Appendp(p, newprog)
 
 	p.As = AADDI
 	p.From = obj.Addr{Type: obj.TYPE_CONST}
-	p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP})
+	p.Reg = REG_TMP
 	p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 	p = obj.Appendp(p, newprog)
 
@@ -148,7 +145,7 @@ func jalrToSym(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc, lr int16) *ob
 	p.From.Reg = lr
 	// Leave Sym only for the CALL reloc in assemble.
 	p.From.Sym = to.Sym
-	p.SetFrom3(obj.Addr{})
+	p.Reg = 0
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = REG_TMP
 	lowerjalr(p)
@@ -214,20 +211,14 @@ func addrtoreg(a obj.Addr) int16 {
 // progedit is called individually for each Prog.  It normalizes instruction
 // formats and eliminates as many pseudoinstructions as it can.
 func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
-	// Ensure everything has a From3 to eliminate a ton of nil-pointer
-	// checks later.
-	if p.GetFrom3() == nil {
-		p.SetFrom3(obj.Addr{Type: obj.TYPE_NONE})
-	}
 
 	// Expand binary instructions to ternary ones.
-	if p.GetFrom3().Type == obj.TYPE_NONE {
+	if p.Reg == 0 {
 		switch p.As {
 		case AADD, ASUB, ASLL, AXOR, ASRL, ASRA, AOR, AAND, AMUL, AMULH,
 			AMULHU, AMULHSU, AMULW, ADIV, ADIVU, AREM, AREMU, ADIVW,
 			ADIVUW, AREMW, AREMUW:
-			p.GetFrom3().Type = obj.TYPE_REG
-			p.GetFrom3().Reg = p.To.Reg
+			p.Reg = p.To.Reg
 		}
 	}
 
@@ -315,8 +306,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 		// immediate area of the encoded instruction, so record it in
 		// the Offset field.
 		p.From.Offset = i.csr
-		p.GetFrom3().Type = obj.TYPE_REG
-		p.GetFrom3().Reg = REG_ZERO
+		p.Reg = REG_ZERO
 		if p.To.Type == obj.TYPE_NONE {
 			p.To.Type = obj.TYPE_REG
 			p.To.Reg = REG_ZERO
@@ -325,26 +315,26 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 	case ASEQZ:
 		// SEQZ rs, rd -> SLTIU $1, rs, rd
 		p.As = ASLTIU
-		p.SetFrom3(p.From)
+		p.Reg = p.From.Reg // XXX
 		p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 1}
 
 	case ASNEZ:
 		// SNEZ rs, rd -> SLTU rs, x0, rd
 		p.As = ASLTU
-		p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO})
+		p.Reg = REG_ZERO
 
-	// For binary float instructions, use From3 and To, not From and
+	// For binary float instructions, use Reg and To, not From and
 	// To. This helps simplify encoding.
 	case AFNEGS:
 		// FNEGS rs, rd -> FSGNJNS rs, rs, rd
 		p.As = AFSGNJNS
-		p.SetFrom3(p.From)
+		p.Reg = p.From.Reg // XXX
 	case AFNEGD:
 		// FNEGD rs, rd -> FSGNJND rs, rs, rd
 		p.As = AFSGNJND
-		p.SetFrom3(p.From)
+		p.Reg = p.From.Reg // XXX
 	case AFSQRTS, AFSQRTD:
-		p.SetFrom3(p.From)
+		p.Reg = p.From.Reg // XXX
 
 		// This instruction expects a zero (i.e., float register 0) to
 		// be the second input operand.
@@ -412,14 +402,14 @@ func containsCall(sym *obj.LSym) bool {
 func loadImmIntoRegTmp(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc, low, high int64) *obj.Prog {
 	p.As = ALUI
 	p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: high}
-	p.SetFrom3(obj.Addr{})
+	p.Reg = 0
 	p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 	p.Spadj = 0 // needed if TO is SP
 	p = obj.Appendp(p, newprog)
 
 	p.As = AADDIW
 	p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: low}
-	p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP})
+	p.Reg = REG_TMP
 	p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 	p = obj.Appendp(p, newprog)
 
@@ -487,7 +477,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		prologue.As = AADDI
 		prologue.From.Type = obj.TYPE_CONST
 		prologue.From.Offset = -stacksize
-		prologue.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP})
+		prologue.Reg = REG_SP
 		prologue.To.Type = obj.TYPE_REG
 		prologue.To.Reg = REG_SP
 		prologue.Spadj = int32(stacksize)
@@ -495,12 +485,12 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 	// Actually save RA.
 	if saveRA {
-		// Source register in From3, destination base register in To,
+		// Source register in Reg, destination base register in To,
 		// destination offset in From. See MOV TYPE_REG, TYPE_MEM below
 		// for details.
 		prologue = obj.Appendp(prologue, newprog)
 		prologue.As = ASD
-		prologue.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_RA})
+		prologue.Reg = REG_RA
 		prologue.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP}
 		prologue.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 0}
 	}
@@ -528,7 +518,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 		ldpanic.As = AMOV
 		ldpanic.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REGG, Offset: 4 * int64(ctxt.Arch.PtrSize)} // G.panic
-		ldpanic.SetFrom3(obj.Addr{})
+		ldpanic.Reg = 0
 		ldpanic.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_A1}
 
 		bneadj := obj.Appendp(ldpanic, newprog)
@@ -548,7 +538,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		getargp := obj.Appendp(last, newprog)
 		getargp.As = AMOV
 		getargp.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_A1, Offset: 0} // Panic.argp
-		getargp.SetFrom3(obj.Addr{})
+		getargp.Reg = 0
 		getargp.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_A2}
 
 		bneadj.Pcond = getargp
@@ -556,7 +546,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		calcargp := obj.Appendp(getargp, newprog)
 		calcargp.As = AADDI
 		calcargp.From = obj.Addr{Type: obj.TYPE_CONST, Offset: stacksize + ctxt.FixedFrameSize()}
-		calcargp.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP})
+		calcargp.Reg = REG_SP
 		calcargp.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_A3}
 
 		testargp := obj.Appendp(calcargp, newprog)
@@ -569,13 +559,13 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		adjargp := obj.Appendp(testargp, newprog)
 		adjargp.As = AADDI
 		adjargp.From = obj.Addr{Type: obj.TYPE_CONST, Offset: int64(ctxt.Arch.PtrSize)}
-		adjargp.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_X2})
+		adjargp.Reg = REG_X2
 		adjargp.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_A2}
 
 		setargp := obj.Appendp(adjargp, newprog)
 		setargp.As = AMOV
 		setargp.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_A2}
-		setargp.SetFrom3(obj.Addr{})
+		setargp.Reg = 0
 		setargp.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_A1, Offset: 0} // Panic.argp
 
 		godone := obj.Appendp(setargp, newprog)
@@ -588,9 +578,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	// Update stack-based offsets.
 	for p := cursym.Func.Text; p != nil; p = p.Link {
 		stackOffset(&p.From, stacksize)
-		if p.GetFrom3() != nil {
-			stackOffset(p.GetFrom3(), stacksize)
-		}
 		stackOffset(&p.To, stacksize)
 
 		// TODO: update stacksize when instructions that modify SP are
@@ -630,7 +617,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 						ctxt.Diag("progedit: unsupported load at %v", p)
 					}
 					p.As = movtol(p.As)
-					p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: addrtoreg(p.From)})
+					p.Reg = addrtoreg(p.From)
 					p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: p.From.Offset}
 				case obj.NAME_EXTERN, obj.NAME_STATIC:
 					// AUIPC $off_hi, R
@@ -643,14 +630,14 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					// with either instruction. It will be
 					// extracted for a relocation later.
 					p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: p.From.Offset, Sym: p.From.Sym}
-					p.SetFrom3(obj.Addr{})
+					p.Reg = 0
 					p.To = obj.Addr{Type: obj.TYPE_REG, Reg: to.Reg}
 					p.Mark |= NEED_PCREL_ITYPE_RELOC
 					p = obj.Appendp(p, newprog)
 
 					p.As = movtol(as)
 					p.From = obj.Addr{Type: obj.TYPE_CONST}
-					p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: to.Reg})
+					p.Reg = to.Reg
 					p.To = to
 				default:
 					ctxt.Diag("progedit: unsupported name %d for %v", p.From.Name, p)
@@ -661,14 +648,14 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					switch p.As {
 					case AMOV: // MOV Ra, Rb -> ADDI $0, Ra, Rb
 						p.As = AADDI
-						p.SetFrom3(p.From)
+						p.Reg = p.From.Reg // XXX
 						p.From = obj.Addr{Type: obj.TYPE_CONST}
 					case AMOVF: // MOVF Ra, Rb -> FSGNJS Ra, Ra, Rb
 						p.As = AFSGNJS
-						p.SetFrom3(p.From)
+						p.Reg = p.From.Reg // XXX
 					case AMOVD: // MOVD Ra, Rb -> FSGNJD Ra, Ra, Rb
 						p.As = AFSGNJD
-						p.SetFrom3(p.From)
+						p.Reg = p.From.Reg // XXX
 					default:
 						ctxt.Diag("progedit: unsupported register-register move at %v", p)
 					}
@@ -683,11 +670,10 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 						// The destination address goes in p.From and
 						// p.To here, with the offset in p.From and the
 						// register in p.To. The source register goes in
-						// p.From3.
-						p.SetFrom3(p.From)
+						// Reg.
+						p.Reg = p.From.Reg // XXX
 						p.From = p.To
 						p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: p.From.Offset}
-						p.GetFrom3().Type = obj.TYPE_REG
 						p.To = obj.Addr{Type: obj.TYPE_REG, Reg: addrtoreg(p.To)}
 					case obj.NAME_EXTERN:
 						// AUIPC $off_hi, TMP
@@ -700,14 +686,14 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 						// with either instruction. It will be
 						// extracted for a relocation later.
 						p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: p.To.Offset, Sym: p.To.Sym}
-						p.SetFrom3(obj.Addr{})
+						p.Reg = 0
 						p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 						p.Mark |= NEED_PCREL_STYPE_RELOC
 						p = obj.Appendp(p, newprog)
 
 						p.As = movtos(as)
 						p.From = obj.Addr{Type: obj.TYPE_CONST}
-						p.SetFrom3(from)
+						p.Reg = from.Reg // XXX
 						p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 					default:
 						ctxt.Diag("progedit: unsupported name %d for %v", p.From.Name, p)
@@ -749,9 +735,9 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p.As = AADDIW
 				p.To = to
 				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: low}
-				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO})
+				p.Reg = REG_ZERO
 				if needLUI {
-					p.GetFrom3().Reg = to.Reg
+					p.Reg = to.Reg
 				}
 
 			case obj.TYPE_ADDR: // MOV $sym+off(SP/SB), R
@@ -769,24 +755,22 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					// with either instruction. It will be
 					// extracted for a relocation later.
 					p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: p.From.Offset, Sym: p.From.Sym}
-					p.SetFrom3(obj.Addr{})
+					p.Reg = 0
 					p.To = to
 					p.Mark |= NEED_PCREL_ITYPE_RELOC
 					p = obj.Appendp(p, newprog)
 
 					p.As = AADDI
 					p.From = obj.Addr{Type: obj.TYPE_CONST}
-					p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: to.Reg})
+					p.Reg = to.Reg
 					p.To = to
 				case obj.NAME_PARAM, obj.NAME_AUTO:
 					p.As = AADDI
-					p.GetFrom3().Type = obj.TYPE_REG
+					p.Reg = REG_SP
 					p.From.Type = obj.TYPE_CONST
-					p.GetFrom3().Reg = REG_SP
 				case obj.NAME_NONE:
 					p.As = AADDI
-					p.GetFrom3().Type = obj.TYPE_REG
-					p.GetFrom3().Reg = p.From.Reg
+					p.Reg = p.From.Reg
 					p.From.Type = obj.TYPE_CONST
 					p.From.Reg = 0
 				default:
@@ -819,7 +803,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			if saveRA {
 				// Restore RA.
 				p.As = ALD
-				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP})
+				p.Reg = REG_SP
 				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 0}
 				p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_RA}
 				p = obj.Appendp(p, newprog)
@@ -829,7 +813,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p.As = AADDI
 				p.From.Type = obj.TYPE_CONST
 				p.From.Offset = stacksize
-				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP})
+				p.Reg = REG_SP
 				p.To.Type = obj.TYPE_REG
 				p.To.Reg = REG_SP
 				p.Spadj = int32(-stacksize)
@@ -844,7 +828,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p.As = AJALR
 				p.From.Type = obj.TYPE_CONST
 				p.From.Offset = 0
-				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_RA})
+				p.Reg = REG_RA
 				p.To.Type = obj.TYPE_REG
 				p.To.Reg = REG_ZERO
 			}
@@ -868,7 +852,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			p.As = AXORI // [bit] xor 1 = not [bit]
 			p.From.Type = obj.TYPE_CONST
 			p.From.Offset = 1
-			p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: dst})
+			p.Reg = dst
 			p.To.Type = obj.TYPE_REG
 			p.To.Reg = dst
 		case AFNED:
@@ -881,7 +865,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			p.As = AXORI
 			p.From.Type = obj.TYPE_CONST
 			p.From.Offset = 1
-			p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: dst})
+			p.Reg = dst
 			p.To.Type = obj.TYPE_REG
 			p.To.Reg = dst
 		}
@@ -919,7 +903,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			}
 			p.Spadj = q.Spadj
 			p.To = q.To
-			p.SetFrom3(*q.GetFrom3())
+			p.Reg = q.Reg
 			p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 
 		// <load> $imm, FROM3, TO (load $imm+(FROM3), TO)
@@ -944,25 +928,25 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				// <load> $0, TMP, TO
 				p.As = AADD
 				p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
-				p.SetFrom3(*q.GetFrom3())
+				p.Reg = q.Reg
 				p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 				p = obj.Appendp(p, newprog)
 
 				p.As = q.As
 				p.To = q.To
 				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 0}
-				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP})
+				p.Reg = REG_TMP
 			case ASD, ASB, ASH, ASW:
 				// ADD TMP, TO, TMP
 				// <store> $0, FROM3, TMP
 				p.As = AADD
 				p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
-				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: q.To.Reg})
+				p.Reg = q.To.Reg
 				p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 				p = obj.Appendp(p, newprog)
 
 				p.As = q.As
-				p.SetFrom3(*q.GetFrom3())
+				p.Reg = q.Reg
 				p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 0}
 			}
@@ -1008,12 +992,12 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					jmp.As = AJALR
 					jmp.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 0}
 					jmp.To = p.From
-					jmp.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP})
+					jmp.Reg = REG_TMP
 					// Assuming TMP is not live across J instructions, since it's reserved by SSA that should be OK
 
 					p.As = AAUIPC
 					p.From = obj.Addr{Type: obj.TYPE_BRANCH, Sym: p.From.Sym} // not generally valid, fixed up in the next loop
-					p.SetFrom3(obj.Addr{})
+					p.Reg = 0
 					p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
 
 					rescan = true
@@ -1053,7 +1037,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 	// Validate all instructions. This provides nice error messages.
 	for p := cursym.Func.Text; p != nil; p = p.Link {
-		encodingForP(p).validate(p)
+		encodingForProg(p).validate(p)
 	}
 }
 
@@ -1096,7 +1080,7 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 		p.As = AADDI
 		p.From.Type = obj.TYPE_CONST
 		p.From.Offset = -(int64(framesize) - objabi.StackSmall)
-		p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_X2})
+		p.Reg = REG_X2
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = REG_A1
 
@@ -1142,7 +1126,7 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 		p.As = AADDI
 		p.From.Type = obj.TYPE_CONST
 		p.From.Offset = int64(objabi.StackGuard)
-		p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_X2})
+		p.Reg = REG_X2
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = REG_A1
 
@@ -1150,7 +1134,7 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 		p.As = ASUB
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = REG_A0
-		p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_A1})
+		p.Reg = REG_A1 // XXX
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = REG_A1
 
@@ -1255,51 +1239,79 @@ func Split32BitImmediate(imm int64) (low, high int64, err error) {
 	return
 }
 
-func regval(r int16, min int16, max int16) uint32 {
-	if r < min || max < r {
+func regVal(r int16, min int16, max int16) uint32 {
+	if r < min || r > max {
 		panic(fmt.Sprintf("register out of range, want %d < %d < %d", min, r, max))
 	}
 	return uint32(r - min)
 }
 
-func reg(a obj.Addr, min int16, max int16) uint32 {
+// regAddr extracts a register from an Addr.
+func regAddr(a obj.Addr, min int16, max int16) uint32 {
 	if a.Type != obj.TYPE_REG {
 		panic(fmt.Sprintf("ill typed: %+v", a))
 	}
-	return regval(a.Reg, min, max)
+	return regVal(a.Reg, min, max)
 }
 
-// regi extracts the integer register from an Addr.
-func regi(a obj.Addr) uint32 { return reg(a, REG_X0, REG_X31) }
+// regI returns an integer register.
+func regI(r int16) uint32 {
+	return regVal(r, REG_X0, REG_X31)
+}
 
-// regf extracts the float register from an Addr.
-func regf(a obj.Addr) uint32 { return reg(a, REG_F0, REG_F31) }
+// regF returns a float register.
+func regF(r int16) uint32 {
+	return regVal(r, REG_F0, REG_F31)
+}
 
-func wantReg(p *obj.Prog, pos string, a *obj.Addr, descr string, min int16, max int16) {
+// regIAddr extracts the integer register from an Addr.
+func regIAddr(a obj.Addr) uint32 {
+	return regAddr(a, REG_X0, REG_X31)
+}
+
+// regFAddr extracts the float register from an Addr.
+func regFAddr(a obj.Addr) uint32 {
+	return regAddr(a, REG_F0, REG_F31)
+}
+
+func wantReg(p *obj.Prog, pos string, descr string, r, min, max int16) {
+	if r < min || r > max {
+		p.Ctxt.Diag("%v\texpected %s register in %s position but got non-%s register %s", p, descr, pos, descr, regName(int(r)))
+	}
+}
+
+// wantIntReg checks that r is an integer register.
+func wantIntReg(p *obj.Prog, pos string, r int16) {
+	wantReg(p, pos, "integer", r, REG_X0, REG_X31)
+}
+
+// wantFloatReg checks that r is a floating-point register.
+func wantFloatReg(p *obj.Prog, pos string, r int16) {
+	wantReg(p, pos, "float", r, REG_F0, REG_F31)
+}
+
+func wantRegAddr(p *obj.Prog, pos string, a *obj.Addr, descr string, min, max int16) {
 	if a == nil {
-		p.Ctxt.Diag("%v\texpected register in %s position but got nothing",
-			p, pos)
+		p.Ctxt.Diag("%v\texpected register in %s position but got nothing", p, pos)
 		return
 	}
 	if a.Type != obj.TYPE_REG {
-		p.Ctxt.Diag("%v\texpected register in %s position but got %s",
-			p, pos, obj.Dconv(p, a))
+		p.Ctxt.Diag("%v\texpected register in %s position but got %s", p, pos, obj.Dconv(p, a))
 		return
 	}
-	if a.Reg < min || max < a.Reg {
-		p.Ctxt.Diag("%v\texpected %s register in %s position but got non-%s register %s",
-			p, descr, pos, descr, obj.Dconv(p, a))
+	if a.Reg < min || a.Reg > max {
+		p.Ctxt.Diag("%v\texpected %s register in %s position but got non-%s register %s", p, descr, pos, descr, obj.Dconv(p, a))
 	}
 }
 
-// wantIntReg checks that a contains an integer register.
-func wantIntReg(p *obj.Prog, pos string, a *obj.Addr) {
-	wantReg(p, pos, a, "integer", REG_X0, REG_X31)
+// wantIntRegAddr checks that a contains an integer register.
+func wantIntRegAddr(p *obj.Prog, pos string, a *obj.Addr) {
+	wantRegAddr(p, pos, a, "integer", REG_X0, REG_X31)
 }
 
-// wantFloatReg checks that a contains a floating-point register.
-func wantFloatReg(p *obj.Prog, pos string, a *obj.Addr) {
-	wantReg(p, pos, a, "float", REG_F0, REG_F31)
+// wantFloatRegAddr checks that a contains a floating-point register.
+func wantFloatRegAddr(p *obj.Prog, pos string, a *obj.Addr) {
+	wantRegAddr(p, pos, a, "float", REG_F0, REG_F31)
 }
 
 // immFits reports whether immediate value x fits in nbits bits.
@@ -1310,8 +1322,8 @@ func immFits(x int64, nbits uint) bool {
 	return min <= x && x <= max
 }
 
-// immi extracts the integer literal of the specified size from an Addr.
-func immi(a obj.Addr, nbits uint) uint32 {
+// immI extracts the integer literal of the specified size from an Addr.
+func immI(a obj.Addr, nbits uint) uint32 {
 	if a.Type != obj.TYPE_CONST {
 		panic(fmt.Sprintf("ill typed: %+v", a))
 	}
@@ -1338,36 +1350,36 @@ func wantEvenJumpOffset(p *obj.Prog) {
 }
 
 func validateRIII(p *obj.Prog) {
-	wantIntReg(p, "from", &p.From)
-	wantIntReg(p, "from3", p.GetFrom3())
-	wantIntReg(p, "to", &p.To)
+	wantIntRegAddr(p, "from", &p.From)
+	wantIntReg(p, "reg", p.Reg)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func validateRFFF(p *obj.Prog) {
-	wantFloatReg(p, "from", &p.From)
-	wantFloatReg(p, "from3", p.GetFrom3())
-	wantFloatReg(p, "to", &p.To)
+	wantFloatRegAddr(p, "from", &p.From)
+	wantFloatReg(p, "reg", p.Reg)
+	wantFloatRegAddr(p, "to", &p.To)
 }
 
 func validateRFFI(p *obj.Prog) {
-	wantFloatReg(p, "from", &p.From)
-	wantFloatReg(p, "from3", p.GetFrom3())
-	wantIntReg(p, "to", &p.To)
+	wantFloatRegAddr(p, "from", &p.From)
+	wantFloatReg(p, "reg", p.Reg)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func validateRFI(p *obj.Prog) {
-	wantFloatReg(p, "from", &p.From)
-	wantIntReg(p, "to", &p.To)
+	wantFloatRegAddr(p, "from", &p.From)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func validateRIF(p *obj.Prog) {
-	wantIntReg(p, "from", &p.From)
-	wantFloatReg(p, "to", &p.To)
+	wantIntRegAddr(p, "from", &p.From)
+	wantFloatRegAddr(p, "to", &p.To)
 }
 
 func validateRFF(p *obj.Prog) {
-	wantFloatReg(p, "from", &p.From)
-	wantFloatReg(p, "to", &p.To)
+	wantFloatRegAddr(p, "from", &p.From)
+	wantFloatRegAddr(p, "to", &p.To)
 }
 
 func encodeR(p *obj.Prog, rs1 uint32, rs2 uint32, rd uint32) uint32 {
@@ -1385,44 +1397,44 @@ func encodeR(p *obj.Prog, rs1 uint32, rs2 uint32, rd uint32) uint32 {
 }
 
 func encodeRIII(p *obj.Prog) uint32 {
-	return encodeR(p, regi(*p.GetFrom3()), regi(p.From), regi(p.To))
+	return encodeR(p, regI(p.Reg), regIAddr(p.From), regIAddr(p.To))
 }
 
 func encodeRFFF(p *obj.Prog) uint32 {
-	return encodeR(p, regf(*p.GetFrom3()), regf(p.From), regf(p.To))
+	return encodeR(p, regF(p.Reg), regFAddr(p.From), regFAddr(p.To))
 }
 
 func encodeRFFI(p *obj.Prog) uint32 {
-	return encodeR(p, regf(*p.GetFrom3()), regf(p.From), regi(p.To))
+	return encodeR(p, regF(p.Reg), regFAddr(p.From), regIAddr(p.To))
 }
 
 func encodeRFI(p *obj.Prog) uint32 {
-	return encodeR(p, regf(p.From), 0, regi(p.To))
+	return encodeR(p, regFAddr(p.From), 0, regIAddr(p.To))
 }
 
 func encodeRIF(p *obj.Prog) uint32 {
-	return encodeR(p, regi(p.From), 0, regf(p.To))
+	return encodeR(p, regIAddr(p.From), 0, regFAddr(p.To))
 }
 
 func encodeRFF(p *obj.Prog) uint32 {
-	return encodeR(p, regf(p.From), 0, regf(p.To))
+	return encodeR(p, regFAddr(p.From), 0, regFAddr(p.To))
 }
 
 func validateII(p *obj.Prog) {
 	wantImm(p, "from", p.From, 12)
-	wantIntReg(p, "from3", p.GetFrom3())
-	wantIntReg(p, "to", &p.To)
+	wantIntReg(p, "reg", p.Reg)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func validateIF(p *obj.Prog) {
 	wantImm(p, "from", p.From, 12)
-	wantIntReg(p, "from3", p.GetFrom3())
-	wantFloatReg(p, "to", &p.To)
+	wantIntReg(p, "reg", p.Reg)
+	wantFloatRegAddr(p, "to", &p.To)
 }
 
 func encodeI(p *obj.Prog, rd uint32) uint32 {
-	imm := immi(p.From, 12)
-	rs1 := regi(*p.GetFrom3())
+	imm := immI(p.From, 12)
+	rs1 := regI(p.Reg)
 	i := encode(p.As)
 	if i == nil {
 		panic("encodeI: could not encode instruction")
@@ -1432,54 +1444,48 @@ func encodeI(p *obj.Prog, rd uint32) uint32 {
 }
 
 func encodeII(p *obj.Prog) uint32 {
-	return encodeI(p, regi(p.To))
+	return encodeI(p, regIAddr(p.To))
 }
 
 func encodeIF(p *obj.Prog) uint32 {
-	return encodeI(p, regf(p.To))
+	return encodeI(p, regFAddr(p.To))
 }
 
 func validateSI(p *obj.Prog) {
 	wantImm(p, "from", p.From, 12)
-	wantIntReg(p, "from3", p.GetFrom3())
-	wantIntReg(p, "to", &p.To)
+	wantIntReg(p, "reg", p.Reg)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func validateSF(p *obj.Prog) {
 	wantImm(p, "from", p.From, 12)
-	wantFloatReg(p, "from3", p.GetFrom3())
-	wantIntReg(p, "to", &p.To)
+	wantFloatReg(p, "reg", p.Reg)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func EncodeSImmediate(imm int64) (int64, error) {
 	if !immFits(imm, 12) {
 		return 0, fmt.Errorf("immediate %#x does not fit in 12 bits", imm)
 	}
-
 	return ((imm >> 5) << 25) | ((imm & 0x1f) << 7), nil
 }
 
 func encodeS(p *obj.Prog, rs2 uint32) uint32 {
-	imm := immi(p.From, 12)
-	rs1 := regi(p.To)
+	imm := immI(p.From, 12)
+	rs1 := regIAddr(p.To)
 	i := encode(p.As)
 	if i == nil {
 		panic("encodeS: could not encode instruction")
 	}
-	return (imm>>5)<<25 |
-		rs2<<20 |
-		rs1<<15 |
-		i.funct3<<12 |
-		(imm&0x1f)<<7 |
-		i.opcode
+	return (imm>>5)<<25 | rs2<<20 | rs1<<15 | i.funct3<<12 | (imm&0x1f)<<7 | i.opcode
 }
 
 func encodeSI(p *obj.Prog) uint32 {
-	return encodeS(p, regi(*p.GetFrom3()))
+	return encodeS(p, regI(p.Reg))
 }
 
 func encodeSF(p *obj.Prog) uint32 {
-	return encodeS(p, regf(*p.GetFrom3()))
+	return encodeS(p, regF(p.Reg))
 }
 
 func validateSB(p *obj.Prog) {
@@ -1487,26 +1493,19 @@ func validateSB(p *obj.Prog) {
 	// We implicitly drop the least significant bit in encodeSB.
 	wantEvenJumpOffset(p)
 	wantImm(p, "to", p.To, 13)
-	// TODO: validate that the register from p.Reg is in range
-	wantIntReg(p, "from", &p.From)
+	wantIntReg(p, "reg", p.Reg)
+	wantIntRegAddr(p, "from", &p.From)
 }
 
 func encodeSB(p *obj.Prog) uint32 {
-	imm := immi(p.To, 13)
-	rs2 := regval(p.Reg, REG_X0, REG_X31)
-	rs1 := regi(p.From)
+	imm := immI(p.To, 13)
+	rs2 := regI(p.Reg)
+	rs1 := regIAddr(p.From)
 	i := encode(p.As)
 	if i == nil {
 		panic("encodeSB: could not encode instruction")
 	}
-	return (imm>>12)<<31 |
-		((imm>>5)&0x3f)<<25 |
-		rs2<<20 |
-		rs1<<15 |
-		i.funct3<<12 |
-		((imm>>1)&0xf)<<8 |
-		((imm>>11)&0x1)<<7 |
-		i.opcode
+	return (imm>>12)<<31 | ((imm>>5)&0x3f)<<25 | rs2<<20 | rs1<<15 | i.funct3<<12 | ((imm>>1)&0xf)<<8 | ((imm>>11)&0x1)<<7 | i.opcode
 }
 
 func validateU(p *obj.Prog) {
@@ -1518,7 +1517,7 @@ func validateU(p *obj.Prog) {
 		return
 	}
 	wantImm(p, "from", p.From, 20)
-	wantIntReg(p, "to", &p.To)
+	wantIntRegAddr(p, "to", &p.To)
 }
 
 func encodeU(p *obj.Prog) uint32 {
@@ -1526,8 +1525,8 @@ func encodeU(p *obj.Prog) uint32 {
 	// Rather than have the user/compiler generate a 32 bit constant,
 	// the bottommost bits of which must all be zero,
 	// instead accept just the top bits.
-	imm := immi(p.From, 20)
-	rd := regi(p.To)
+	imm := immI(p.From, 20)
+	rd := regIAddr(p.To)
 	i := encode(p.As)
 	if i == nil {
 		panic("encodeU: could not encode instruction")
@@ -1539,7 +1538,6 @@ func EncodeIImmediate(imm int64) (int64, error) {
 	if !immFits(imm, 12) {
 		return 0, fmt.Errorf("immediate %#x does not fit in 12 bits", imm)
 	}
-
 	return imm << 20, nil
 }
 
@@ -1547,7 +1545,6 @@ func EncodeUImmediate(imm int64) (int64, error) {
 	if !immFits(imm, 20) {
 		return 0, fmt.Errorf("immediate %#x does not fit in 20 bits", imm)
 	}
-
 	return imm << 12, nil
 }
 
@@ -1556,15 +1553,12 @@ func validateUJ(p *obj.Prog) {
 	// We implicitly drop the least significant bit in encodeUJ.
 	wantEvenJumpOffset(p)
 	wantImm(p, "to", p.To, 21)
-	wantIntReg(p, "from", &p.From)
+	wantIntRegAddr(p, "from", &p.From)
 }
 
 // encodeUJImmediate encodes a UJ-type immediate. imm must fit in 21-bits.
 func encodeUJImmediate(imm uint32) uint32 {
-	return (imm>>20)<<31 |
-		((imm>>1)&0x3ff)<<21 |
-		((imm>>11)&0x1)<<20 |
-		((imm>>12)&0xff)<<12
+	return (imm>>20)<<31 | ((imm>>1)&0x3ff)<<21 | ((imm>>11)&0x1)<<20 | ((imm>>12)&0xff)<<12
 }
 
 // EncodeUJImmediate encodes a UJ-type immediate.
@@ -1576,8 +1570,8 @@ func EncodeUJImmediate(imm int64) (uint32, error) {
 }
 
 func encodeUJ(p *obj.Prog) uint32 {
-	imm := encodeUJImmediate(immi(p.To, 21))
-	rd := regi(p.From)
+	imm := encodeUJImmediate(immI(p.To, 21))
+	rd := regIAddr(p.From)
 	i := encode(p.As)
 	if i == nil {
 		panic("encodeUJ: could not encode instruction")

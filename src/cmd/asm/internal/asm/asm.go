@@ -417,15 +417,7 @@ func (p *Parser) asmJump(op obj.As, cond string, a []obj.Addr) {
 			prog.Reg = reg
 			break
 		}
-		if p.arch.Family == sys.MIPS || p.arch.Family == sys.MIPS64 {
-			// 3-operand jumps.
-			// First two must be registers
-			target = &a[2]
-			prog.From = a[0]
-			prog.Reg = p.getRegister(prog, op, &a[1])
-			break
-		}
-		if p.arch.Family == sys.RISCV64 {
+		if p.arch.Family == sys.MIPS || p.arch.Family == sys.MIPS64 || p.arch.Family == sys.RISCV64 {
 			// 3-operand jumps.
 			// First two must be registers
 			target = &a[2]
@@ -587,7 +579,7 @@ func (p *Parser) asmInstruction(op obj.As, cond string, a []obj.Addr) {
 		prog.To = a[1]
 	case 3:
 		switch p.arch.Family {
-		case sys.MIPS, sys.MIPS64:
+		case sys.MIPS, sys.MIPS64, sys.RISCV64:
 			prog.From = a[0]
 			prog.Reg = p.getRegister(prog, op, &a[1])
 			prog.To = a[2]
@@ -672,10 +664,6 @@ func (p *Parser) asmInstruction(op obj.As, cond string, a []obj.Addr) {
 				p.errorf("invalid addressing modes for %s instruction", op)
 				return
 			}
-		case sys.RISCV64:
-			prog.From = a[0]
-			prog.SetFrom3(*newAddr(a[1]))
-			prog.To = a[2]
 		case sys.S390X:
 			prog.From = a[0]
 			if a[1].Type == obj.TYPE_REG {
