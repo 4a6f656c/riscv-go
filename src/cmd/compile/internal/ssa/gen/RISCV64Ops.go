@@ -20,7 +20,7 @@ func init() {
 	addreg := func(r int, name string) regMask {
 		mask := regMask(1) << uint(len(regNamesRISCV64))
 		if name == "" {
-			name = riscv.RegNames[int16(r)]
+			name = riscv.RegName(r)
 		}
 		regNamesRISCV64 = append(regNamesRISCV64, name)
 		regNamed[name] = mask
@@ -286,7 +286,7 @@ func init() {
 	}
 
 	RISCV64blocks := []blockData{
-		{name: "BNE"}, // Control != 0 (take a register)
+		{name: "BNE", controls: 1}, // Control != 0 (take a register)
 	}
 
 	archs = append(archs, arch{

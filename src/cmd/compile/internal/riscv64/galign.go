@@ -19,7 +19,6 @@ func Init(arch *gc.Arch) {
 
 	arch.Ginsnop = ginsnop
 	arch.Ginsnopdefer = ginsnop
-	arch.ZeroAuto = zeroAuto
 	arch.ZeroRange = zerorange
 
 	// TODO(prattmic): other fields?

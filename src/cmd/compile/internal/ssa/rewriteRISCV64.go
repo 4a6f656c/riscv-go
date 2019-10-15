@@ -3,17 +3,7 @@
 
 package ssa
 
-import "fmt"
-import "math"
-import "cmd/internal/obj"
-import "cmd/internal/objabi"
 import "cmd/compile/internal/types"
-
-var _ = fmt.Println   // in case not otherwise used
-var _ = math.MinInt8  // in case not otherwise used
-var _ = obj.ANOP      // in case not otherwise used
-var _ = objabi.GOROOT // in case not otherwise used
-var _ = types.TypeMem // in case not otherwise used
 
 func rewriteValueRISCV64(v *Value) bool {
 	switch v.Op {
@@ -522,7 +512,6 @@ func rewriteValueRISCV64(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAdd16_0(v *Value) bool {
 	// match: (Add16 x y)
-	// cond:
 	// result: (ADD x y)
 	for {
 		y := v.Args[1]
@@ -535,7 +524,6 @@ func rewriteValueRISCV64_OpAdd16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAdd32_0(v *Value) bool {
 	// match: (Add32 x y)
-	// cond:
 	// result: (ADD x y)
 	for {
 		y := v.Args[1]
@@ -548,7 +536,6 @@ func rewriteValueRISCV64_OpAdd32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAdd32F_0(v *Value) bool {
 	// match: (Add32F x y)
-	// cond:
 	// result: (FADDS x y)
 	for {
 		y := v.Args[1]
@@ -561,7 +548,6 @@ func rewriteValueRISCV64_OpAdd32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAdd64_0(v *Value) bool {
 	// match: (Add64 x y)
-	// cond:
 	// result: (ADD x y)
 	for {
 		y := v.Args[1]
@@ -574,7 +560,6 @@ func rewriteValueRISCV64_OpAdd64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAdd64F_0(v *Value) bool {
 	// match: (Add64F x y)
-	// cond:
 	// result: (FADDD x y)
 	for {
 		y := v.Args[1]
@@ -587,7 +572,6 @@ func rewriteValueRISCV64_OpAdd64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAdd8_0(v *Value) bool {
 	// match: (Add8 x y)
-	// cond:
 	// result: (ADD x y)
 	for {
 		y := v.Args[1]
@@ -600,7 +584,6 @@ func rewriteValueRISCV64_OpAdd8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAddPtr_0(v *Value) bool {
 	// match: (AddPtr x y)
-	// cond:
 	// result: (ADD x y)
 	for {
 		y := v.Args[1]
@@ -613,7 +596,6 @@ func rewriteValueRISCV64_OpAddPtr_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAddr_0(v *Value) bool {
 	// match: (Addr {sym} base)
-	// cond:
 	// result: (MOVaddr {sym} base)
 	for {
 		sym := v.Aux
@@ -626,7 +608,6 @@ func rewriteValueRISCV64_OpAddr_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAnd16_0(v *Value) bool {
 	// match: (And16 x y)
-	// cond:
 	// result: (AND x y)
 	for {
 		y := v.Args[1]
@@ -639,7 +620,6 @@ func rewriteValueRISCV64_OpAnd16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAnd32_0(v *Value) bool {
 	// match: (And32 x y)
-	// cond:
 	// result: (AND x y)
 	for {
 		y := v.Args[1]
@@ -652,7 +632,6 @@ func rewriteValueRISCV64_OpAnd32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAnd64_0(v *Value) bool {
 	// match: (And64 x y)
-	// cond:
 	// result: (AND x y)
 	for {
 		y := v.Args[1]
@@ -665,7 +644,6 @@ func rewriteValueRISCV64_OpAnd64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAnd8_0(v *Value) bool {
 	// match: (And8 x y)
-	// cond:
 	// result: (AND x y)
 	for {
 		y := v.Args[1]
@@ -678,7 +656,6 @@ func rewriteValueRISCV64_OpAnd8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpAndB_0(v *Value) bool {
 	// match: (AndB x y)
-	// cond:
 	// result: (AND x y)
 	for {
 		y := v.Args[1]
@@ -692,7 +669,6 @@ func rewriteValueRISCV64_OpAndB_0(v *Value) bool {
 func rewriteValueRISCV64_OpAvg64u_0(v *Value) bool {
 	b := v.Block
 	// match: (Avg64u <t> x y)
-	// cond:
 	// result: (ADD (ADD <t> (SRLI <t> [1] x) (SRLI <t> [1] y)) (ANDI <t> [1] (AND <t> x y)))
 	for {
 		t := v.Type
@@ -721,7 +697,6 @@ func rewriteValueRISCV64_OpAvg64u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpClosureCall_0(v *Value) bool {
 	// match: (ClosureCall [argwid] entry closure mem)
-	// cond:
 	// result: (CALLclosure [argwid] entry closure mem)
 	for {
 		argwid := v.AuxInt
@@ -738,7 +713,6 @@ func rewriteValueRISCV64_OpClosureCall_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCom16_0(v *Value) bool {
 	// match: (Com16 x)
-	// cond:
 	// result: (XORI [int64(-1)] x)
 	for {
 		x := v.Args[0]
@@ -750,7 +724,6 @@ func rewriteValueRISCV64_OpCom16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCom32_0(v *Value) bool {
 	// match: (Com32 x)
-	// cond:
 	// result: (XORI [int64(-1)] x)
 	for {
 		x := v.Args[0]
@@ -762,7 +735,6 @@ func rewriteValueRISCV64_OpCom32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCom64_0(v *Value) bool {
 	// match: (Com64 x)
-	// cond:
 	// result: (XORI [int64(-1)] x)
 	for {
 		x := v.Args[0]
@@ -774,7 +746,6 @@ func rewriteValueRISCV64_OpCom64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCom8_0(v *Value) bool {
 	// match: (Com8 x)
-	// cond:
 	// result: (XORI [int64(-1)] x)
 	for {
 		x := v.Args[0]
@@ -786,7 +757,6 @@ func rewriteValueRISCV64_OpCom8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConst16_0(v *Value) bool {
 	// match: (Const16 [val])
-	// cond:
 	// result: (MOVHconst [val])
 	for {
 		val := v.AuxInt
@@ -797,7 +767,6 @@ func rewriteValueRISCV64_OpConst16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConst32_0(v *Value) bool {
 	// match: (Const32 [val])
-	// cond:
 	// result: (MOVWconst [val])
 	for {
 		val := v.AuxInt
@@ -810,7 +779,6 @@ func rewriteValueRISCV64_OpConst32F_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Const32F [val])
-	// cond:
 	// result: (FMVSX (MOVSconst [val]))
 	for {
 		val := v.AuxInt
@@ -823,7 +791,6 @@ func rewriteValueRISCV64_OpConst32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConst64_0(v *Value) bool {
 	// match: (Const64 [val])
-	// cond:
 	// result: (MOVDconst [val])
 	for {
 		val := v.AuxInt
@@ -836,7 +803,6 @@ func rewriteValueRISCV64_OpConst64F_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Const64F [val])
-	// cond:
 	// result: (FMVDX (MOVDconst [val]))
 	for {
 		val := v.AuxInt
@@ -849,7 +815,6 @@ func rewriteValueRISCV64_OpConst64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConst8_0(v *Value) bool {
 	// match: (Const8 [val])
-	// cond:
 	// result: (MOVBconst [val])
 	for {
 		val := v.AuxInt
@@ -860,7 +825,6 @@ func rewriteValueRISCV64_OpConst8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConstBool_0(v *Value) bool {
 	// match: (ConstBool [b])
-	// cond:
 	// result: (MOVBconst [b])
 	for {
 		b := v.AuxInt
@@ -871,7 +835,6 @@ func rewriteValueRISCV64_OpConstBool_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConstNil_0(v *Value) bool {
 	// match: (ConstNil)
-	// cond:
 	// result: (MOVDconst [0])
 	for {
 		v.reset(OpRISCV64MOVDconst)
@@ -881,7 +844,6 @@ func rewriteValueRISCV64_OpConstNil_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpConvert_0(v *Value) bool {
 	// match: (Convert x mem)
-	// cond:
 	// result: (MOVconvert x mem)
 	for {
 		mem := v.Args[1]
@@ -894,7 +856,6 @@ func rewriteValueRISCV64_OpConvert_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt32Fto32_0(v *Value) bool {
 	// match: (Cvt32Fto32 x)
-	// cond:
 	// result: (FCVTWS x)
 	for {
 		x := v.Args[0]
@@ -905,7 +866,6 @@ func rewriteValueRISCV64_OpCvt32Fto32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt32Fto64_0(v *Value) bool {
 	// match: (Cvt32Fto64 x)
-	// cond:
 	// result: (FCVTLS x)
 	for {
 		x := v.Args[0]
@@ -916,7 +876,6 @@ func rewriteValueRISCV64_OpCvt32Fto64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt32Fto64F_0(v *Value) bool {
 	// match: (Cvt32Fto64F x)
-	// cond:
 	// result: (FCVTDS x)
 	for {
 		x := v.Args[0]
@@ -927,7 +886,6 @@ func rewriteValueRISCV64_OpCvt32Fto64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt32to32F_0(v *Value) bool {
 	// match: (Cvt32to32F x)
-	// cond:
 	// result: (FCVTSW x)
 	for {
 		x := v.Args[0]
@@ -938,7 +896,6 @@ func rewriteValueRISCV64_OpCvt32to32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt32to64F_0(v *Value) bool {
 	// match: (Cvt32to64F x)
-	// cond:
 	// result: (FCVTDW x)
 	for {
 		x := v.Args[0]
@@ -949,7 +906,6 @@ func rewriteValueRISCV64_OpCvt32to64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt64Fto32_0(v *Value) bool {
 	// match: (Cvt64Fto32 x)
-	// cond:
 	// result: (FCVTWD x)
 	for {
 		x := v.Args[0]
@@ -960,7 +916,6 @@ func rewriteValueRISCV64_OpCvt64Fto32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt64Fto32F_0(v *Value) bool {
 	// match: (Cvt64Fto32F x)
-	// cond:
 	// result: (FCVTSD x)
 	for {
 		x := v.Args[0]
@@ -971,7 +926,6 @@ func rewriteValueRISCV64_OpCvt64Fto32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt64Fto64_0(v *Value) bool {
 	// match: (Cvt64Fto64 x)
-	// cond:
 	// result: (FCVTLD x)
 	for {
 		x := v.Args[0]
@@ -982,7 +936,6 @@ func rewriteValueRISCV64_OpCvt64Fto64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt64to32F_0(v *Value) bool {
 	// match: (Cvt64to32F x)
-	// cond:
 	// result: (FCVTSL x)
 	for {
 		x := v.Args[0]
@@ -993,7 +946,6 @@ func rewriteValueRISCV64_OpCvt64to32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpCvt64to64F_0(v *Value) bool {
 	// match: (Cvt64to64F x)
-	// cond:
 	// result: (FCVTDL x)
 	for {
 		x := v.Args[0]
@@ -1006,7 +958,6 @@ func rewriteValueRISCV64_OpDiv16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Div16 x y)
-	// cond:
 	// result: (DIVW (SignExt16to32 x) (SignExt16to32 y))
 	for {
 		y := v.Args[1]
@@ -1025,7 +976,6 @@ func rewriteValueRISCV64_OpDiv16u_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Div16u x y)
-	// cond:
 	// result: (DIVUW (ZeroExt16to32 x) (ZeroExt16to32 y))
 	for {
 		y := v.Args[1]
@@ -1042,7 +992,6 @@ func rewriteValueRISCV64_OpDiv16u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpDiv32_0(v *Value) bool {
 	// match: (Div32 x y)
-	// cond:
 	// result: (DIVW x y)
 	for {
 		y := v.Args[1]
@@ -1055,7 +1004,6 @@ func rewriteValueRISCV64_OpDiv32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpDiv32F_0(v *Value) bool {
 	// match: (Div32F x y)
-	// cond:
 	// result: (FDIVS x y)
 	for {
 		y := v.Args[1]
@@ -1068,7 +1016,6 @@ func rewriteValueRISCV64_OpDiv32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpDiv32u_0(v *Value) bool {
 	// match: (Div32u x y)
-	// cond:
 	// result: (DIVUW x y)
 	for {
 		y := v.Args[1]
@@ -1081,7 +1028,6 @@ func rewriteValueRISCV64_OpDiv32u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpDiv64_0(v *Value) bool {
 	// match: (Div64 x y)
-	// cond:
 	// result: (DIV x y)
 	for {
 		y := v.Args[1]
@@ -1094,7 +1040,6 @@ func rewriteValueRISCV64_OpDiv64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpDiv64F_0(v *Value) bool {
 	// match: (Div64F x y)
-	// cond:
 	// result: (FDIVD x y)
 	for {
 		y := v.Args[1]
@@ -1107,7 +1052,6 @@ func rewriteValueRISCV64_OpDiv64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpDiv64u_0(v *Value) bool {
 	// match: (Div64u x y)
-	// cond:
 	// result: (DIVU x y)
 	for {
 		y := v.Args[1]
@@ -1122,7 +1066,6 @@ func rewriteValueRISCV64_OpDiv8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Div8 x y)
-	// cond:
 	// result: (DIVW (SignExt8to32 x) (SignExt8to32 y))
 	for {
 		y := v.Args[1]
@@ -1141,7 +1084,6 @@ func rewriteValueRISCV64_OpDiv8u_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Div8u x y)
-	// cond:
 	// result: (DIVUW (ZeroExt8to32 x) (ZeroExt8to32 y))
 	for {
 		y := v.Args[1]
@@ -1160,7 +1102,6 @@ func rewriteValueRISCV64_OpEq16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Eq16 x y)
-	// cond:
 	// result: (SEQZ (ZeroExt16to64 (SUB <x.Type> x y)))
 	for {
 		y := v.Args[1]
@@ -1179,7 +1120,6 @@ func rewriteValueRISCV64_OpEq32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Eq32 x y)
-	// cond:
 	// result: (SEQZ (ZeroExt32to64 (SUB <x.Type> x y)))
 	for {
 		y := v.Args[1]
@@ -1196,7 +1136,6 @@ func rewriteValueRISCV64_OpEq32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpEq32F_0(v *Value) bool {
 	// match: (Eq32F x y)
-	// cond:
 	// result: (FEQS x y)
 	for {
 		y := v.Args[1]
@@ -1210,7 +1149,6 @@ func rewriteValueRISCV64_OpEq32F_0(v *Value) bool {
 func rewriteValueRISCV64_OpEq64_0(v *Value) bool {
 	b := v.Block
 	// match: (Eq64 x y)
-	// cond:
 	// result: (SEQZ (SUB <x.Type> x y))
 	for {
 		y := v.Args[1]
@@ -1225,7 +1163,6 @@ func rewriteValueRISCV64_OpEq64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpEq64F_0(v *Value) bool {
 	// match: (Eq64F x y)
-	// cond:
 	// result: (FEQD x y)
 	for {
 		y := v.Args[1]
@@ -1240,7 +1177,6 @@ func rewriteValueRISCV64_OpEq8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Eq8 x y)
-	// cond:
 	// result: (SEQZ (ZeroExt8to64 (SUB <x.Type> x y)))
 	for {
 		y := v.Args[1]
@@ -1257,7 +1193,6 @@ func rewriteValueRISCV64_OpEq8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpEqB_0(v *Value) bool {
 	// match: (EqB x y)
-	// cond:
 	// result: (Eq8 x y)
 	for {
 		y := v.Args[1]
@@ -1271,7 +1206,6 @@ func rewriteValueRISCV64_OpEqB_0(v *Value) bool {
 func rewriteValueRISCV64_OpEqPtr_0(v *Value) bool {
 	b := v.Block
 	// match: (EqPtr x y)
-	// cond:
 	// result: (SEQZ (SUB <x.Type> x y))
 	for {
 		y := v.Args[1]
@@ -1288,7 +1222,6 @@ func rewriteValueRISCV64_OpGeq16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq16 x y)
-	// cond:
 	// result: (Not (Less16 x y))
 	for {
 		y := v.Args[1]
@@ -1305,7 +1238,6 @@ func rewriteValueRISCV64_OpGeq16U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq16U x y)
-	// cond:
 	// result: (Not (Less16U x y))
 	for {
 		y := v.Args[1]
@@ -1322,7 +1254,6 @@ func rewriteValueRISCV64_OpGeq32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq32 x y)
-	// cond:
 	// result: (Not (Less32 x y))
 	for {
 		y := v.Args[1]
@@ -1337,7 +1268,6 @@ func rewriteValueRISCV64_OpGeq32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGeq32F_0(v *Value) bool {
 	// match: (Geq32F x y)
-	// cond:
 	// result: (FLES y x)
 	for {
 		y := v.Args[1]
@@ -1352,7 +1282,6 @@ func rewriteValueRISCV64_OpGeq32U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq32U x y)
-	// cond:
 	// result: (Not (Less32U x y))
 	for {
 		y := v.Args[1]
@@ -1369,7 +1298,6 @@ func rewriteValueRISCV64_OpGeq64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq64 x y)
-	// cond:
 	// result: (Not (Less64 x y))
 	for {
 		y := v.Args[1]
@@ -1384,7 +1312,6 @@ func rewriteValueRISCV64_OpGeq64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGeq64F_0(v *Value) bool {
 	// match: (Geq64F x y)
-	// cond:
 	// result: (FLED y x)
 	for {
 		y := v.Args[1]
@@ -1399,7 +1326,6 @@ func rewriteValueRISCV64_OpGeq64U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq64U x y)
-	// cond:
 	// result: (Not (Less64U x y))
 	for {
 		y := v.Args[1]
@@ -1416,7 +1342,6 @@ func rewriteValueRISCV64_OpGeq8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq8 x y)
-	// cond:
 	// result: (Not (Less8 x y))
 	for {
 		y := v.Args[1]
@@ -1433,7 +1358,6 @@ func rewriteValueRISCV64_OpGeq8U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Geq8U x y)
-	// cond:
 	// result: (Not (Less8U x y))
 	for {
 		y := v.Args[1]
@@ -1448,7 +1372,6 @@ func rewriteValueRISCV64_OpGeq8U_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGetCallerPC_0(v *Value) bool {
 	// match: (GetCallerPC)
-	// cond:
 	// result: (LoweredGetCallerPC)
 	for {
 		v.reset(OpRISCV64LoweredGetCallerPC)
@@ -1457,7 +1380,6 @@ func rewriteValueRISCV64_OpGetCallerPC_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGetCallerSP_0(v *Value) bool {
 	// match: (GetCallerSP)
-	// cond:
 	// result: (LoweredGetCallerSP)
 	for {
 		v.reset(OpRISCV64LoweredGetCallerSP)
@@ -1466,7 +1388,6 @@ func rewriteValueRISCV64_OpGetCallerSP_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGetClosurePtr_0(v *Value) bool {
 	// match: (GetClosurePtr)
-	// cond:
 	// result: (LoweredGetClosurePtr)
 	for {
 		v.reset(OpRISCV64LoweredGetClosurePtr)
@@ -1475,7 +1396,6 @@ func rewriteValueRISCV64_OpGetClosurePtr_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater16_0(v *Value) bool {
 	// match: (Greater16 x y)
-	// cond:
 	// result: (Less16 y x)
 	for {
 		y := v.Args[1]
@@ -1488,7 +1408,6 @@ func rewriteValueRISCV64_OpGreater16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater16U_0(v *Value) bool {
 	// match: (Greater16U x y)
-	// cond:
 	// result: (Less16U y x)
 	for {
 		y := v.Args[1]
@@ -1501,7 +1420,6 @@ func rewriteValueRISCV64_OpGreater16U_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater32_0(v *Value) bool {
 	// match: (Greater32 x y)
-	// cond:
 	// result: (Less32 y x)
 	for {
 		y := v.Args[1]
@@ -1514,7 +1432,6 @@ func rewriteValueRISCV64_OpGreater32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater32F_0(v *Value) bool {
 	// match: (Greater32F x y)
-	// cond:
 	// result: (FLTS y x)
 	for {
 		y := v.Args[1]
@@ -1527,7 +1444,6 @@ func rewriteValueRISCV64_OpGreater32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater32U_0(v *Value) bool {
 	// match: (Greater32U x y)
-	// cond:
 	// result: (Less32U y x)
 	for {
 		y := v.Args[1]
@@ -1540,7 +1456,6 @@ func rewriteValueRISCV64_OpGreater32U_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater64_0(v *Value) bool {
 	// match: (Greater64 x y)
-	// cond:
 	// result: (Less64 y x)
 	for {
 		y := v.Args[1]
@@ -1553,7 +1468,6 @@ func rewriteValueRISCV64_OpGreater64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater64F_0(v *Value) bool {
 	// match: (Greater64F x y)
-	// cond:
 	// result: (FLTD y x)
 	for {
 		y := v.Args[1]
@@ -1566,7 +1480,6 @@ func rewriteValueRISCV64_OpGreater64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater64U_0(v *Value) bool {
 	// match: (Greater64U x y)
-	// cond:
 	// result: (Less64U y x)
 	for {
 		y := v.Args[1]
@@ -1579,7 +1492,6 @@ func rewriteValueRISCV64_OpGreater64U_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater8_0(v *Value) bool {
 	// match: (Greater8 x y)
-	// cond:
 	// result: (Less8 y x)
 	for {
 		y := v.Args[1]
@@ -1592,7 +1504,6 @@ func rewriteValueRISCV64_OpGreater8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpGreater8U_0(v *Value) bool {
 	// match: (Greater8U x y)
-	// cond:
 	// result: (Less8U y x)
 	for {
 		y := v.Args[1]
@@ -1607,7 +1518,6 @@ func rewriteValueRISCV64_OpHmul32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Hmul32 x y)
-	// cond:
 	// result: (SRAI [32] (MUL (SignExt32to64 x) (SignExt32to64 y)))
 	for {
 		y := v.Args[1]
@@ -1629,7 +1539,6 @@ func rewriteValueRISCV64_OpHmul32u_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Hmul32u x y)
-	// cond:
 	// result: (SRLI [32] (MUL (ZeroExt32to64 x) (ZeroExt32to64 y)))
 	for {
 		y := v.Args[1]
@@ -1649,7 +1558,6 @@ func rewriteValueRISCV64_OpHmul32u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpHmul64_0(v *Value) bool {
 	// match: (Hmul64 x y)
-	// cond:
 	// result: (MULH x y)
 	for {
 		y := v.Args[1]
@@ -1662,7 +1570,6 @@ func rewriteValueRISCV64_OpHmul64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpHmul64u_0(v *Value) bool {
 	// match: (Hmul64u x y)
-	// cond:
 	// result: (MULHU x y)
 	for {
 		y := v.Args[1]
@@ -1675,7 +1582,6 @@ func rewriteValueRISCV64_OpHmul64u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpInterCall_0(v *Value) bool {
 	// match: (InterCall [argwid] entry mem)
-	// cond:
 	// result: (CALLinter [argwid] entry mem)
 	for {
 		argwid := v.AuxInt
@@ -1690,7 +1596,6 @@ func rewriteValueRISCV64_OpInterCall_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpIsInBounds_0(v *Value) bool {
 	// match: (IsInBounds idx len)
-	// cond:
 	// result: (Less64U idx len)
 	for {
 		len := v.Args[1]
@@ -1705,7 +1610,6 @@ func rewriteValueRISCV64_OpIsNonNil_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (IsNonNil p)
-	// cond:
 	// result: (NeqPtr (MOVDconst) p)
 	for {
 		p := v.Args[0]
@@ -1718,7 +1622,6 @@ func rewriteValueRISCV64_OpIsNonNil_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpIsSliceInBounds_0(v *Value) bool {
 	// match: (IsSliceInBounds idx len)
-	// cond:
 	// result: (Leq64U idx len)
 	for {
 		len := v.Args[1]
@@ -1733,7 +1636,6 @@ func rewriteValueRISCV64_OpLeq16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq16 x y)
-	// cond:
 	// result: (Not (Less16 y x))
 	for {
 		y := v.Args[1]
@@ -1750,7 +1652,6 @@ func rewriteValueRISCV64_OpLeq16U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq16U x y)
-	// cond:
 	// result: (Not (Less16U y x))
 	for {
 		y := v.Args[1]
@@ -1767,7 +1668,6 @@ func rewriteValueRISCV64_OpLeq32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq32 x y)
-	// cond:
 	// result: (Not (Less32 y x))
 	for {
 		y := v.Args[1]
@@ -1782,7 +1682,6 @@ func rewriteValueRISCV64_OpLeq32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLeq32F_0(v *Value) bool {
 	// match: (Leq32F x y)
-	// cond:
 	// result: (FLES x y)
 	for {
 		y := v.Args[1]
@@ -1797,7 +1696,6 @@ func rewriteValueRISCV64_OpLeq32U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq32U x y)
-	// cond:
 	// result: (Not (Less32U y x))
 	for {
 		y := v.Args[1]
@@ -1814,7 +1712,6 @@ func rewriteValueRISCV64_OpLeq64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq64 x y)
-	// cond:
 	// result: (Not (Less64 y x))
 	for {
 		y := v.Args[1]
@@ -1829,7 +1726,6 @@ func rewriteValueRISCV64_OpLeq64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLeq64F_0(v *Value) bool {
 	// match: (Leq64F x y)
-	// cond:
 	// result: (FLED x y)
 	for {
 		y := v.Args[1]
@@ -1844,7 +1740,6 @@ func rewriteValueRISCV64_OpLeq64U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq64U x y)
-	// cond:
 	// result: (Not (Less64U y x))
 	for {
 		y := v.Args[1]
@@ -1861,7 +1756,6 @@ func rewriteValueRISCV64_OpLeq8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq8 x y)
-	// cond:
 	// result: (Not (Less8 y x))
 	for {
 		y := v.Args[1]
@@ -1878,7 +1772,6 @@ func rewriteValueRISCV64_OpLeq8U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Leq8U x y)
-	// cond:
 	// result: (Not (Less8U y x))
 	for {
 		y := v.Args[1]
@@ -1895,7 +1788,6 @@ func rewriteValueRISCV64_OpLess16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Less16 x y)
-	// cond:
 	// result: (SLT (SignExt16to64 x) (SignExt16to64 y))
 	for {
 		y := v.Args[1]
@@ -1914,7 +1806,6 @@ func rewriteValueRISCV64_OpLess16U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Less16U x y)
-	// cond:
 	// result: (SLTU (ZeroExt16to64 x) (ZeroExt16to64 y))
 	for {
 		y := v.Args[1]
@@ -1933,7 +1824,6 @@ func rewriteValueRISCV64_OpLess32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Less32 x y)
-	// cond:
 	// result: (SLT (SignExt32to64 x) (SignExt32to64 y))
 	for {
 		y := v.Args[1]
@@ -1950,7 +1840,6 @@ func rewriteValueRISCV64_OpLess32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLess32F_0(v *Value) bool {
 	// match: (Less32F x y)
-	// cond:
 	// result: (FLTS x y)
 	for {
 		y := v.Args[1]
@@ -1965,7 +1854,6 @@ func rewriteValueRISCV64_OpLess32U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Less32U x y)
-	// cond:
 	// result: (SLTU (ZeroExt32to64 x) (ZeroExt32to64 y))
 	for {
 		y := v.Args[1]
@@ -1982,7 +1870,6 @@ func rewriteValueRISCV64_OpLess32U_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLess64_0(v *Value) bool {
 	// match: (Less64 x y)
-	// cond:
 	// result: (SLT x y)
 	for {
 		y := v.Args[1]
@@ -1995,7 +1882,6 @@ func rewriteValueRISCV64_OpLess64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLess64F_0(v *Value) bool {
 	// match: (Less64F x y)
-	// cond:
 	// result: (FLTD x y)
 	for {
 		y := v.Args[1]
@@ -2008,7 +1894,6 @@ func rewriteValueRISCV64_OpLess64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLess64U_0(v *Value) bool {
 	// match: (Less64U x y)
-	// cond:
 	// result: (SLTU x y)
 	for {
 		y := v.Args[1]
@@ -2023,7 +1908,6 @@ func rewriteValueRISCV64_OpLess8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Less8 x y)
-	// cond:
 	// result: (SLT (SignExt8to64 x) (SignExt8to64 y))
 	for {
 		y := v.Args[1]
@@ -2042,7 +1926,6 @@ func rewriteValueRISCV64_OpLess8U_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Less8U x y)
-	// cond:
 	// result: (SLTU (ZeroExt8to64 x) (ZeroExt8to64 y))
 	for {
 		y := v.Args[1]
@@ -2212,7 +2095,6 @@ func rewriteValueRISCV64_OpLoad_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpLocalAddr_0(v *Value) bool {
 	// match: (LocalAddr {sym} base _)
-	// cond:
 	// result: (MOVaddr {sym} base)
 	for {
 		sym := v.Aux
@@ -2228,7 +2110,6 @@ func rewriteValueRISCV64_OpLsh16x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh16x16 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg16 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -2254,7 +2135,6 @@ func rewriteValueRISCV64_OpLsh16x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh16x32 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg16 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -2279,7 +2159,6 @@ func rewriteValueRISCV64_OpLsh16x32_0(v *Value) bool {
 func rewriteValueRISCV64_OpLsh16x64_0(v *Value) bool {
 	b := v.Block
 	// match: (Lsh16x64 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg16 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -2303,7 +2182,6 @@ func rewriteValueRISCV64_OpLsh16x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh16x8 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg16 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -2329,7 +2207,6 @@ func rewriteValueRISCV64_OpLsh32x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh32x16 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg32 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -2355,7 +2232,6 @@ func rewriteValueRISCV64_OpLsh32x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh32x32 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg32 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -2380,7 +2256,6 @@ func rewriteValueRISCV64_OpLsh32x32_0(v *Value) bool {
 func rewriteValueRISCV64_OpLsh32x64_0(v *Value) bool {
 	b := v.Block
 	// match: (Lsh32x64 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg32 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -2404,7 +2279,6 @@ func rewriteValueRISCV64_OpLsh32x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh32x8 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg32 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -2430,7 +2304,6 @@ func rewriteValueRISCV64_OpLsh64x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh64x16 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg64 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -2456,7 +2329,6 @@ func rewriteValueRISCV64_OpLsh64x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh64x32 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg64 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -2481,7 +2353,6 @@ func rewriteValueRISCV64_OpLsh64x32_0(v *Value) bool {
 func rewriteValueRISCV64_OpLsh64x64_0(v *Value) bool {
 	b := v.Block
 	// match: (Lsh64x64 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg64 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -2505,7 +2376,6 @@ func rewriteValueRISCV64_OpLsh64x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh64x8 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg64 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -2531,7 +2401,6 @@ func rewriteValueRISCV64_OpLsh8x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh8x16 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg8 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -2557,7 +2426,6 @@ func rewriteValueRISCV64_OpLsh8x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh8x32 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg8 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -2582,7 +2450,6 @@ func rewriteValueRISCV64_OpLsh8x32_0(v *Value) bool {
 func rewriteValueRISCV64_OpLsh8x64_0(v *Value) bool {
 	b := v.Block
 	// match: (Lsh8x64 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg8 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -2606,7 +2473,6 @@ func rewriteValueRISCV64_OpLsh8x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Lsh8x8 <t> x y)
-	// cond:
 	// result: (AND (SLL <t> x y) (Neg8 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -2632,7 +2498,6 @@ func rewriteValueRISCV64_OpMod16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Mod16 x y)
-	// cond:
 	// result: (REMW (SignExt16to32 x) (SignExt16to32 y))
 	for {
 		y := v.Args[1]
@@ -2651,7 +2516,6 @@ func rewriteValueRISCV64_OpMod16u_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Mod16u x y)
-	// cond:
 	// result: (REMUW (ZeroExt16to32 x) (ZeroExt16to32 y))
 	for {
 		y := v.Args[1]
@@ -2668,7 +2532,6 @@ func rewriteValueRISCV64_OpMod16u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMod32_0(v *Value) bool {
 	// match: (Mod32 x y)
-	// cond:
 	// result: (REMW x y)
 	for {
 		y := v.Args[1]
@@ -2681,7 +2544,6 @@ func rewriteValueRISCV64_OpMod32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMod32u_0(v *Value) bool {
 	// match: (Mod32u x y)
-	// cond:
 	// result: (REMUW x y)
 	for {
 		y := v.Args[1]
@@ -2694,7 +2556,6 @@ func rewriteValueRISCV64_OpMod32u_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMod64_0(v *Value) bool {
 	// match: (Mod64 x y)
-	// cond:
 	// result: (REM x y)
 	for {
 		y := v.Args[1]
@@ -2707,7 +2568,6 @@ func rewriteValueRISCV64_OpMod64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMod64u_0(v *Value) bool {
 	// match: (Mod64u x y)
-	// cond:
 	// result: (REMU x y)
 	for {
 		y := v.Args[1]
@@ -2722,7 +2582,6 @@ func rewriteValueRISCV64_OpMod8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Mod8 x y)
-	// cond:
 	// result: (REMW (SignExt8to32 x) (SignExt8to32 y))
 	for {
 		y := v.Args[1]
@@ -2741,7 +2600,6 @@ func rewriteValueRISCV64_OpMod8u_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Mod8u x y)
-	// cond:
 	// result: (REMUW (ZeroExt8to32 x) (ZeroExt8to32 y))
 	for {
 		y := v.Args[1]
@@ -2761,7 +2619,6 @@ func rewriteValueRISCV64_OpMove_0(v *Value) bool {
 	config := b.Func.Config
 	typ := &b.Func.Config.Types
 	// match: (Move [0] _ _ mem)
-	// cond:
 	// result: mem
 	for {
 		if v.AuxInt != 0 {
@@ -2774,7 +2631,6 @@ func rewriteValueRISCV64_OpMove_0(v *Value) bool {
 		return true
 	}
 	// match: (Move [1] dst src mem)
-	// cond:
 	// result: (MOVBstore dst (MOVBload src mem) mem)
 	for {
 		if v.AuxInt != 1 {
@@ -2793,7 +2649,6 @@ func rewriteValueRISCV64_OpMove_0(v *Value) bool {
 		return true
 	}
 	// match: (Move [2] dst src mem)
-	// cond:
 	// result: (MOVHstore dst (MOVHload src mem) mem)
 	for {
 		if v.AuxInt != 2 {
@@ -2812,7 +2667,6 @@ func rewriteValueRISCV64_OpMove_0(v *Value) bool {
 		return true
 	}
 	// match: (Move [4] dst src mem)
-	// cond:
 	// result: (MOVWstore dst (MOVWload src mem) mem)
 	for {
 		if v.AuxInt != 4 {
@@ -2831,7 +2685,6 @@ func rewriteValueRISCV64_OpMove_0(v *Value) bool {
 		return true
 	}
 	// match: (Move [8] dst src mem)
-	// cond:
 	// result: (MOVDstore dst (MOVDload src mem) mem)
 	for {
 		if v.AuxInt != 8 {
@@ -2850,7 +2703,6 @@ func rewriteValueRISCV64_OpMove_0(v *Value) bool {
 		return true
 	}
 	// match: (Move [s] {t} dst src mem)
-	// cond:
 	// result: (LoweredMove [t.(*types.Type).Alignment()] dst src (ADDI <src.Type> [s-moveSize(t.(*types.Type).Alignment(), config)] src) mem)
 	for {
 		s := v.AuxInt
@@ -2874,7 +2726,6 @@ func rewriteValueRISCV64_OpMul16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Mul16 x y)
-	// cond:
 	// result: (MULW (SignExt16to32 x) (SignExt16to32 y))
 	for {
 		y := v.Args[1]
@@ -2891,7 +2742,6 @@ func rewriteValueRISCV64_OpMul16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMul32_0(v *Value) bool {
 	// match: (Mul32 x y)
-	// cond:
 	// result: (MULW x y)
 	for {
 		y := v.Args[1]
@@ -2904,7 +2754,6 @@ func rewriteValueRISCV64_OpMul32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMul32F_0(v *Value) bool {
 	// match: (Mul32F x y)
-	// cond:
 	// result: (FMULS x y)
 	for {
 		y := v.Args[1]
@@ -2917,7 +2766,6 @@ func rewriteValueRISCV64_OpMul32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMul64_0(v *Value) bool {
 	// match: (Mul64 x y)
-	// cond:
 	// result: (MUL x y)
 	for {
 		y := v.Args[1]
@@ -2930,7 +2778,6 @@ func rewriteValueRISCV64_OpMul64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpMul64F_0(v *Value) bool {
 	// match: (Mul64F x y)
-	// cond:
 	// result: (FMULD x y)
 	for {
 		y := v.Args[1]
@@ -2945,7 +2792,6 @@ func rewriteValueRISCV64_OpMul8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Mul8 x y)
-	// cond:
 	// result: (MULW (SignExt8to32 x) (SignExt8to32 y))
 	for {
 		y := v.Args[1]
@@ -2964,7 +2810,6 @@ func rewriteValueRISCV64_OpNeg16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neg16 x)
-	// cond:
 	// result: (SUB (MOVHconst) x)
 	for {
 		x := v.Args[0]
@@ -2979,7 +2824,6 @@ func rewriteValueRISCV64_OpNeg32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neg32 x)
-	// cond:
 	// result: (SUB (MOVWconst) x)
 	for {
 		x := v.Args[0]
@@ -2992,7 +2836,6 @@ func rewriteValueRISCV64_OpNeg32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNeg32F_0(v *Value) bool {
 	// match: (Neg32F x)
-	// cond:
 	// result: (FNEGS x)
 	for {
 		x := v.Args[0]
@@ -3005,7 +2848,6 @@ func rewriteValueRISCV64_OpNeg64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neg64 x)
-	// cond:
 	// result: (SUB (MOVDconst) x)
 	for {
 		x := v.Args[0]
@@ -3018,7 +2860,6 @@ func rewriteValueRISCV64_OpNeg64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNeg64F_0(v *Value) bool {
 	// match: (Neg64F x)
-	// cond:
 	// result: (FNEGD x)
 	for {
 		x := v.Args[0]
@@ -3031,7 +2872,6 @@ func rewriteValueRISCV64_OpNeg8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neg8 x)
-	// cond:
 	// result: (SUB (MOVBconst) x)
 	for {
 		x := v.Args[0]
@@ -3046,7 +2886,6 @@ func rewriteValueRISCV64_OpNeq16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neq16 x y)
-	// cond:
 	// result: (SNEZ (ZeroExt16to64 (SUB <x.Type> x y)))
 	for {
 		y := v.Args[1]
@@ -3065,7 +2904,6 @@ func rewriteValueRISCV64_OpNeq32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neq32 x y)
-	// cond:
 	// result: (SNEZ (ZeroExt32to64 (SUB <x.Type> x y)))
 	for {
 		y := v.Args[1]
@@ -3082,7 +2920,6 @@ func rewriteValueRISCV64_OpNeq32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNeq32F_0(v *Value) bool {
 	// match: (Neq32F x y)
-	// cond:
 	// result: (FNES x y)
 	for {
 		y := v.Args[1]
@@ -3096,7 +2933,6 @@ func rewriteValueRISCV64_OpNeq32F_0(v *Value) bool {
 func rewriteValueRISCV64_OpNeq64_0(v *Value) bool {
 	b := v.Block
 	// match: (Neq64 x y)
-	// cond:
 	// result: (SNEZ (SUB <x.Type> x y))
 	for {
 		y := v.Args[1]
@@ -3111,7 +2947,6 @@ func rewriteValueRISCV64_OpNeq64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNeq64F_0(v *Value) bool {
 	// match: (Neq64F x y)
-	// cond:
 	// result: (FNED x y)
 	for {
 		y := v.Args[1]
@@ -3126,7 +2961,6 @@ func rewriteValueRISCV64_OpNeq8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Neq8 x y)
-	// cond:
 	// result: (SNEZ (ZeroExt8to64 (SUB <x.Type> x y)))
 	for {
 		y := v.Args[1]
@@ -3143,7 +2977,6 @@ func rewriteValueRISCV64_OpNeq8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNeqB_0(v *Value) bool {
 	// match: (NeqB x y)
-	// cond:
 	// result: (Neq8 x y)
 	for {
 		y := v.Args[1]
@@ -3157,7 +2990,6 @@ func rewriteValueRISCV64_OpNeqB_0(v *Value) bool {
 func rewriteValueRISCV64_OpNeqPtr_0(v *Value) bool {
 	b := v.Block
 	// match: (NeqPtr x y)
-	// cond:
 	// result: (SNEZ (SUB <x.Type> x y))
 	for {
 		y := v.Args[1]
@@ -3172,7 +3004,6 @@ func rewriteValueRISCV64_OpNeqPtr_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNilCheck_0(v *Value) bool {
 	// match: (NilCheck ptr mem)
-	// cond:
 	// result: (LoweredNilCheck ptr mem)
 	for {
 		mem := v.Args[1]
@@ -3185,7 +3016,6 @@ func rewriteValueRISCV64_OpNilCheck_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNot_0(v *Value) bool {
 	// match: (Not x)
-	// cond:
 	// result: (XORI [1] x)
 	for {
 		x := v.Args[0]
@@ -3199,7 +3029,6 @@ func rewriteValueRISCV64_OpOffPtr_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (OffPtr [off] ptr:(SP))
-	// cond:
 	// result: (MOVaddr [off] ptr)
 	for {
 		off := v.AuxInt
@@ -3227,7 +3056,6 @@ func rewriteValueRISCV64_OpOffPtr_0(v *Value) bool {
 		return true
 	}
 	// match: (OffPtr [off] ptr)
-	// cond:
 	// result: (ADD (MOVDconst [off]) ptr)
 	for {
 		off := v.AuxInt
@@ -3242,7 +3070,6 @@ func rewriteValueRISCV64_OpOffPtr_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpOr16_0(v *Value) bool {
 	// match: (Or16 x y)
-	// cond:
 	// result: (OR x y)
 	for {
 		y := v.Args[1]
@@ -3255,7 +3082,6 @@ func rewriteValueRISCV64_OpOr16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpOr32_0(v *Value) bool {
 	// match: (Or32 x y)
-	// cond:
 	// result: (OR x y)
 	for {
 		y := v.Args[1]
@@ -3268,7 +3094,6 @@ func rewriteValueRISCV64_OpOr32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpOr64_0(v *Value) bool {
 	// match: (Or64 x y)
-	// cond:
 	// result: (OR x y)
 	for {
 		y := v.Args[1]
@@ -3281,7 +3106,6 @@ func rewriteValueRISCV64_OpOr64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpOr8_0(v *Value) bool {
 	// match: (Or8 x y)
-	// cond:
 	// result: (OR x y)
 	for {
 		y := v.Args[1]
@@ -3294,7 +3118,6 @@ func rewriteValueRISCV64_OpOr8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpOrB_0(v *Value) bool {
 	// match: (OrB x y)
-	// cond:
 	// result: (OR x y)
 	for {
 		y := v.Args[1]
@@ -3425,7 +3248,6 @@ func rewriteValueRISCV64_OpRISCV64ADDI_0(v *Value) bool {
 		return true
 	}
 	// match: (ADDI [0] x)
-	// cond:
 	// result: x
 	for {
 		if v.AuxInt != 0 {
@@ -4056,7 +3878,6 @@ func rewriteValueRISCV64_OpRotateLeft16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (RotateLeft16 <t> x (MOVHconst [c]))
-	// cond:
 	// result: (Or16 (Lsh16x64 <t> x (MOVHconst [c&15])) (Rsh16Ux64 <t> x (MOVHconst [-c&15])))
 	for {
 		t := v.Type
@@ -4088,7 +3909,6 @@ func rewriteValueRISCV64_OpRotateLeft32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (RotateLeft32 <t> x (MOVWconst [c]))
-	// cond:
 	// result: (Or32 (Lsh32x64 <t> x (MOVWconst [c&31])) (Rsh32Ux64 <t> x (MOVWconst [-c&31])))
 	for {
 		t := v.Type
@@ -4120,7 +3940,6 @@ func rewriteValueRISCV64_OpRotateLeft64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (RotateLeft64 <t> x (MOVDconst [c]))
-	// cond:
 	// result: (Or64 (Lsh64x64 <t> x (MOVDconst [c&63])) (Rsh64Ux64 <t> x (MOVDconst [-c&63])))
 	for {
 		t := v.Type
@@ -4152,7 +3971,6 @@ func rewriteValueRISCV64_OpRotateLeft8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (RotateLeft8 <t> x (MOVBconst [c]))
-	// cond:
 	// result: (Or8 (Lsh8x64 <t> x (MOVBconst [c&7])) (Rsh8Ux64 <t> x (MOVBconst [-c&7])))
 	for {
 		t := v.Type
@@ -4182,7 +4000,6 @@ func rewriteValueRISCV64_OpRotateLeft8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpRound32F_0(v *Value) bool {
 	// match: (Round32F x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -4194,7 +4011,6 @@ func rewriteValueRISCV64_OpRound32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpRound64F_0(v *Value) bool {
 	// match: (Round64F x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -4208,7 +4024,6 @@ func rewriteValueRISCV64_OpRsh16Ux16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16Ux16 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt16to64 x) y) (Neg16 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -4236,7 +4051,6 @@ func rewriteValueRISCV64_OpRsh16Ux32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16Ux32 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt16to64 x) y) (Neg16 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -4264,7 +4078,6 @@ func rewriteValueRISCV64_OpRsh16Ux64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16Ux64 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt16to64 x) y) (Neg16 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -4290,7 +4103,6 @@ func rewriteValueRISCV64_OpRsh16Ux8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16Ux8 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt16to64 x) y) (Neg16 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -4318,7 +4130,6 @@ func rewriteValueRISCV64_OpRsh16x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16x16 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt16to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt16to64 y)))))
 	for {
 		t := v.Type
@@ -4348,7 +4159,6 @@ func rewriteValueRISCV64_OpRsh16x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16x32 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt16to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt32to64 y)))))
 	for {
 		t := v.Type
@@ -4378,7 +4188,6 @@ func rewriteValueRISCV64_OpRsh16x64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16x64 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt16to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] y))))
 	for {
 		t := v.Type
@@ -4406,7 +4215,6 @@ func rewriteValueRISCV64_OpRsh16x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh16x8 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt16to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt8to64 y)))))
 	for {
 		t := v.Type
@@ -4436,7 +4244,6 @@ func rewriteValueRISCV64_OpRsh32Ux16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32Ux16 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt32to64 x) y) (Neg32 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -4464,7 +4271,6 @@ func rewriteValueRISCV64_OpRsh32Ux32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32Ux32 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt32to64 x) y) (Neg32 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -4492,7 +4298,6 @@ func rewriteValueRISCV64_OpRsh32Ux64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32Ux64 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt32to64 x) y) (Neg32 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -4518,7 +4323,6 @@ func rewriteValueRISCV64_OpRsh32Ux8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32Ux8 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt32to64 x) y) (Neg32 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -4546,7 +4350,6 @@ func rewriteValueRISCV64_OpRsh32x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32x16 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt32to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt16to64 y)))))
 	for {
 		t := v.Type
@@ -4576,7 +4379,6 @@ func rewriteValueRISCV64_OpRsh32x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32x32 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt32to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt32to64 y)))))
 	for {
 		t := v.Type
@@ -4606,7 +4408,6 @@ func rewriteValueRISCV64_OpRsh32x64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32x64 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt32to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] y))))
 	for {
 		t := v.Type
@@ -4634,7 +4435,6 @@ func rewriteValueRISCV64_OpRsh32x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh32x8 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt32to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt8to64 y)))))
 	for {
 		t := v.Type
@@ -4664,7 +4464,6 @@ func rewriteValueRISCV64_OpRsh64Ux16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh64Ux16 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> x y) (Neg64 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -4690,7 +4489,6 @@ func rewriteValueRISCV64_OpRsh64Ux32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh64Ux32 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> x y) (Neg64 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -4715,7 +4513,6 @@ func rewriteValueRISCV64_OpRsh64Ux32_0(v *Value) bool {
 func rewriteValueRISCV64_OpRsh64Ux64_0(v *Value) bool {
 	b := v.Block
 	// match: (Rsh64Ux64 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> x y) (Neg64 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -4739,7 +4536,6 @@ func rewriteValueRISCV64_OpRsh64Ux8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh64Ux8 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> x y) (Neg64 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -4765,7 +4561,6 @@ func rewriteValueRISCV64_OpRsh64x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh64x16 <t> x y)
-	// cond:
 	// result: (SRA <t> x (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt16to64 y)))))
 	for {
 		t := v.Type
@@ -4793,7 +4588,6 @@ func rewriteValueRISCV64_OpRsh64x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh64x32 <t> x y)
-	// cond:
 	// result: (SRA <t> x (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt32to64 y)))))
 	for {
 		t := v.Type
@@ -4820,7 +4614,6 @@ func rewriteValueRISCV64_OpRsh64x32_0(v *Value) bool {
 func rewriteValueRISCV64_OpRsh64x64_0(v *Value) bool {
 	b := v.Block
 	// match: (Rsh64x64 <t> x y)
-	// cond:
 	// result: (SRA <t> x (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] y))))
 	for {
 		t := v.Type
@@ -4846,7 +4639,6 @@ func rewriteValueRISCV64_OpRsh64x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh64x8 <t> x y)
-	// cond:
 	// result: (SRA <t> x (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt8to64 y)))))
 	for {
 		t := v.Type
@@ -4874,7 +4666,6 @@ func rewriteValueRISCV64_OpRsh8Ux16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8Ux16 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt8to64 x) y) (Neg8 <t> (SLTIU <t> [64] (ZeroExt16to64 y))))
 	for {
 		t := v.Type
@@ -4902,7 +4693,6 @@ func rewriteValueRISCV64_OpRsh8Ux32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8Ux32 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt8to64 x) y) (Neg8 <t> (SLTIU <t> [64] (ZeroExt32to64 y))))
 	for {
 		t := v.Type
@@ -4930,7 +4720,6 @@ func rewriteValueRISCV64_OpRsh8Ux64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8Ux64 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt8to64 x) y) (Neg8 <t> (SLTIU <t> [64] y)))
 	for {
 		t := v.Type
@@ -4956,7 +4745,6 @@ func rewriteValueRISCV64_OpRsh8Ux8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8Ux8 <t> x y)
-	// cond:
 	// result: (AND (SRL <t> (ZeroExt8to64 x) y) (Neg8 <t> (SLTIU <t> [64] (ZeroExt8to64 y))))
 	for {
 		t := v.Type
@@ -4984,7 +4772,6 @@ func rewriteValueRISCV64_OpRsh8x16_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8x16 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt8to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt16to64 y)))))
 	for {
 		t := v.Type
@@ -5014,7 +4801,6 @@ func rewriteValueRISCV64_OpRsh8x32_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8x32 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt8to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt32to64 y)))))
 	for {
 		t := v.Type
@@ -5044,7 +4830,6 @@ func rewriteValueRISCV64_OpRsh8x64_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8x64 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt8to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] y))))
 	for {
 		t := v.Type
@@ -5072,7 +4857,6 @@ func rewriteValueRISCV64_OpRsh8x8_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Rsh8x8 <t> x y)
-	// cond:
 	// result: (SRA <t> (SignExt8to64 x) (OR <y.Type> y (ADDI <y.Type> [-1] (SLTIU <y.Type> [64] (ZeroExt8to64 y)))))
 	for {
 		t := v.Type
@@ -5101,7 +4885,6 @@ func rewriteValueRISCV64_OpRsh8x8_0(v *Value) bool {
 func rewriteValueRISCV64_OpSignExt16to32_0(v *Value) bool {
 	b := v.Block
 	// match: (SignExt16to32 <t> x)
-	// cond:
 	// result: (SRAI [48] (SLLI <t> [48] x))
 	for {
 		t := v.Type
@@ -5118,7 +4901,6 @@ func rewriteValueRISCV64_OpSignExt16to32_0(v *Value) bool {
 func rewriteValueRISCV64_OpSignExt16to64_0(v *Value) bool {
 	b := v.Block
 	// match: (SignExt16to64 <t> x)
-	// cond:
 	// result: (SRAI [48] (SLLI <t> [48] x))
 	for {
 		t := v.Type
@@ -5135,7 +4917,6 @@ func rewriteValueRISCV64_OpSignExt16to64_0(v *Value) bool {
 func rewriteValueRISCV64_OpSignExt32to64_0(v *Value) bool {
 	b := v.Block
 	// match: (SignExt32to64 <t> x)
-	// cond:
 	// result: (SRAI [32] (SLLI <t> [32] x))
 	for {
 		t := v.Type
@@ -5152,7 +4933,6 @@ func rewriteValueRISCV64_OpSignExt32to64_0(v *Value) bool {
 func rewriteValueRISCV64_OpSignExt8to16_0(v *Value) bool {
 	b := v.Block
 	// match: (SignExt8to16 <t> x)
-	// cond:
 	// result: (SRAI [56] (SLLI <t> [56] x))
 	for {
 		t := v.Type
@@ -5169,7 +4949,6 @@ func rewriteValueRISCV64_OpSignExt8to16_0(v *Value) bool {
 func rewriteValueRISCV64_OpSignExt8to32_0(v *Value) bool {
 	b := v.Block
 	// match: (SignExt8to32 <t> x)
-	// cond:
 	// result: (SRAI [56] (SLLI <t> [56] x))
 	for {
 		t := v.Type
@@ -5186,7 +4965,6 @@ func rewriteValueRISCV64_OpSignExt8to32_0(v *Value) bool {
 func rewriteValueRISCV64_OpSignExt8to64_0(v *Value) bool {
 	b := v.Block
 	// match: (SignExt8to64 <t> x)
-	// cond:
 	// result: (SRAI [56] (SLLI <t> [56] x))
 	for {
 		t := v.Type
@@ -5204,7 +4982,6 @@ func rewriteValueRISCV64_OpSlicemask_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Slicemask <t> x)
-	// cond:
 	// result: (XOR (MOVDconst [-1]) (SRA <t> (SUB <t> x (MOVDconst [1])) (MOVDconst [63])))
 	for {
 		t := v.Type
@@ -5229,7 +5006,6 @@ func rewriteValueRISCV64_OpSlicemask_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSqrt_0(v *Value) bool {
 	// match: (Sqrt x)
-	// cond:
 	// result: (FSQRTD x)
 	for {
 		x := v.Args[0]
@@ -5240,7 +5016,6 @@ func rewriteValueRISCV64_OpSqrt_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpStaticCall_0(v *Value) bool {
 	// match: (StaticCall [argwid] {target} mem)
-	// cond:
 	// result: (CALLstatic [argwid] {target} mem)
 	for {
 		argwid := v.AuxInt
@@ -5360,7 +5135,6 @@ func rewriteValueRISCV64_OpStore_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSub16_0(v *Value) bool {
 	// match: (Sub16 x y)
-	// cond:
 	// result: (SUB x y)
 	for {
 		y := v.Args[1]
@@ -5373,7 +5147,6 @@ func rewriteValueRISCV64_OpSub16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSub32_0(v *Value) bool {
 	// match: (Sub32 x y)
-	// cond:
 	// result: (SUB x y)
 	for {
 		y := v.Args[1]
@@ -5386,7 +5159,6 @@ func rewriteValueRISCV64_OpSub32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSub32F_0(v *Value) bool {
 	// match: (Sub32F x y)
-	// cond:
 	// result: (FSUBS x y)
 	for {
 		y := v.Args[1]
@@ -5399,7 +5171,6 @@ func rewriteValueRISCV64_OpSub32F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSub64_0(v *Value) bool {
 	// match: (Sub64 x y)
-	// cond:
 	// result: (SUB x y)
 	for {
 		y := v.Args[1]
@@ -5412,7 +5183,6 @@ func rewriteValueRISCV64_OpSub64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSub64F_0(v *Value) bool {
 	// match: (Sub64F x y)
-	// cond:
 	// result: (FSUBD x y)
 	for {
 		y := v.Args[1]
@@ -5425,7 +5195,6 @@ func rewriteValueRISCV64_OpSub64F_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSub8_0(v *Value) bool {
 	// match: (Sub8 x y)
-	// cond:
 	// result: (SUB x y)
 	for {
 		y := v.Args[1]
@@ -5438,7 +5207,6 @@ func rewriteValueRISCV64_OpSub8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpSubPtr_0(v *Value) bool {
 	// match: (SubPtr x y)
-	// cond:
 	// result: (SUB x y)
 	for {
 		y := v.Args[1]
@@ -5451,7 +5219,6 @@ func rewriteValueRISCV64_OpSubPtr_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpTrunc16to8_0(v *Value) bool {
 	// match: (Trunc16to8 x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -5463,7 +5230,6 @@ func rewriteValueRISCV64_OpTrunc16to8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpTrunc32to16_0(v *Value) bool {
 	// match: (Trunc32to16 x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -5475,7 +5241,6 @@ func rewriteValueRISCV64_OpTrunc32to16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpTrunc32to8_0(v *Value) bool {
 	// match: (Trunc32to8 x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -5487,7 +5252,6 @@ func rewriteValueRISCV64_OpTrunc32to8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpTrunc64to16_0(v *Value) bool {
 	// match: (Trunc64to16 x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -5499,7 +5263,6 @@ func rewriteValueRISCV64_OpTrunc64to16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpTrunc64to32_0(v *Value) bool {
 	// match: (Trunc64to32 x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -5511,7 +5274,6 @@ func rewriteValueRISCV64_OpTrunc64to32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpTrunc64to8_0(v *Value) bool {
 	// match: (Trunc64to8 x)
-	// cond:
 	// result: x
 	for {
 		x := v.Args[0]
@@ -5523,7 +5285,6 @@ func rewriteValueRISCV64_OpTrunc64to8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpWB_0(v *Value) bool {
 	// match: (WB {fn} destptr srcptr mem)
-	// cond:
 	// result: (LoweredWB {fn} destptr srcptr mem)
 	for {
 		fn := v.Aux
@@ -5540,7 +5301,6 @@ func rewriteValueRISCV64_OpWB_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpXor16_0(v *Value) bool {
 	// match: (Xor16 x y)
-	// cond:
 	// result: (XOR x y)
 	for {
 		y := v.Args[1]
@@ -5553,7 +5313,6 @@ func rewriteValueRISCV64_OpXor16_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpXor32_0(v *Value) bool {
 	// match: (Xor32 x y)
-	// cond:
 	// result: (XOR x y)
 	for {
 		y := v.Args[1]
@@ -5566,7 +5325,6 @@ func rewriteValueRISCV64_OpXor32_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpXor64_0(v *Value) bool {
 	// match: (Xor64 x y)
-	// cond:
 	// result: (XOR x y)
 	for {
 		y := v.Args[1]
@@ -5579,7 +5337,6 @@ func rewriteValueRISCV64_OpXor64_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpXor8_0(v *Value) bool {
 	// match: (Xor8 x y)
-	// cond:
 	// result: (XOR x y)
 	for {
 		y := v.Args[1]
@@ -5595,7 +5352,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 	config := b.Func.Config
 	typ := &b.Func.Config.Types
 	// match: (Zero [0] _ mem)
-	// cond:
 	// result: mem
 	for {
 		if v.AuxInt != 0 {
@@ -5608,7 +5364,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 		return true
 	}
 	// match: (Zero [1] ptr mem)
-	// cond:
 	// result: (MOVBstore ptr (MOVBconst) mem)
 	for {
 		if v.AuxInt != 1 {
@@ -5624,7 +5379,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 		return true
 	}
 	// match: (Zero [2] ptr mem)
-	// cond:
 	// result: (MOVHstore ptr (MOVHconst) mem)
 	for {
 		if v.AuxInt != 2 {
@@ -5640,7 +5394,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 		return true
 	}
 	// match: (Zero [4] ptr mem)
-	// cond:
 	// result: (MOVWstore ptr (MOVWconst) mem)
 	for {
 		if v.AuxInt != 4 {
@@ -5656,7 +5409,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 		return true
 	}
 	// match: (Zero [8] ptr mem)
-	// cond:
 	// result: (MOVDstore ptr (MOVDconst) mem)
 	for {
 		if v.AuxInt != 8 {
@@ -5672,7 +5424,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 		return true
 	}
 	// match: (Zero [s] {t} ptr mem)
-	// cond:
 	// result: (LoweredZero [t.(*types.Type).Alignment()] ptr (ADD <ptr.Type> ptr (MOVDconst [s-moveSize(t.(*types.Type).Alignment(), config)])) mem)
 	for {
 		s := v.AuxInt
@@ -5695,7 +5446,6 @@ func rewriteValueRISCV64_OpZero_0(v *Value) bool {
 func rewriteValueRISCV64_OpZeroExt16to32_0(v *Value) bool {
 	b := v.Block
 	// match: (ZeroExt16to32 <t> x)
-	// cond:
 	// result: (SRLI [48] (SLLI <t> [48] x))
 	for {
 		t := v.Type
@@ -5712,7 +5462,6 @@ func rewriteValueRISCV64_OpZeroExt16to32_0(v *Value) bool {
 func rewriteValueRISCV64_OpZeroExt16to64_0(v *Value) bool {
 	b := v.Block
 	// match: (ZeroExt16to64 <t> x)
-	// cond:
 	// result: (SRLI [48] (SLLI <t> [48] x))
 	for {
 		t := v.Type
@@ -5729,7 +5478,6 @@ func rewriteValueRISCV64_OpZeroExt16to64_0(v *Value) bool {
 func rewriteValueRISCV64_OpZeroExt32to64_0(v *Value) bool {
 	b := v.Block
 	// match: (ZeroExt32to64 <t> x)
-	// cond:
 	// result: (SRLI [32] (SLLI <t> [32] x))
 	for {
 		t := v.Type
@@ -5746,7 +5494,6 @@ func rewriteValueRISCV64_OpZeroExt32to64_0(v *Value) bool {
 func rewriteValueRISCV64_OpZeroExt8to16_0(v *Value) bool {
 	b := v.Block
 	// match: (ZeroExt8to16 <t> x)
-	// cond:
 	// result: (SRLI [56] (SLLI <t> [56] x))
 	for {
 		t := v.Type
@@ -5763,7 +5510,6 @@ func rewriteValueRISCV64_OpZeroExt8to16_0(v *Value) bool {
 func rewriteValueRISCV64_OpZeroExt8to32_0(v *Value) bool {
 	b := v.Block
 	// match: (ZeroExt8to32 <t> x)
-	// cond:
 	// result: (SRLI [56] (SLLI <t> [56] x))
 	for {
 		t := v.Type
@@ -5780,7 +5526,6 @@ func rewriteValueRISCV64_OpZeroExt8to32_0(v *Value) bool {
 func rewriteValueRISCV64_OpZeroExt8to64_0(v *Value) bool {
 	b := v.Block
 	// match: (ZeroExt8to64 <t> x)
-	// cond:
 	// result: (SRLI [56] (SLLI <t> [56] x))
 	for {
 		t := v.Type
@@ -5795,21 +5540,14 @@ func rewriteValueRISCV64_OpZeroExt8to64_0(v *Value) bool {
 	}
 }
 func rewriteBlockRISCV64(b *Block) bool {
-	config := b.Func.Config
-	typ := &config.Types
-	_ = typ
-	v := b.Control
-	_ = v
 	switch b.Kind {
 	case BlockIf:
 		// match: (If cond yes no)
-		// cond:
 		// result: (BNE cond yes no)
 		for {
-			cond := b.Control
-			b.Kind = BlockRISCV64BNE
-			b.SetControl(cond)
-			b.Aux = nil
+			cond := b.Controls[0]
+			b.Reset(BlockRISCV64BNE)
+			b.AddControl(cond)
 			return true
 		}
 	}

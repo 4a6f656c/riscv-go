@@ -497,7 +497,7 @@ func ssaGenBlock(s *gc.SSAGenState, b, next *ssa.Block) {
 				s.Br(obj.AJMP, b.Succs[0].Block())
 			}
 		}
-		p.Reg = b.Control.Reg()
+		p.Reg = b.Controls[0].Reg()
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = riscv.REG_ZERO
 
