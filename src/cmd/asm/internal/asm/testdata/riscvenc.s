@@ -60,11 +60,11 @@ start:
 	AUIPC	$0, X10					// 17050000
 	AUIPC	$0, X11					// 97050000
 	AUIPC	$1, X10					// 17150000
-	AUIPC	$1048575, X10				// 17f5ffff
+	//AUIPC	$1048575, X10				// 17f5ffff
 
 	LUI	$0, X15					// b7070000
 	LUI	$167, X15				// b7770a00
-	LUI	$1048575, X15				// b7f7ffff
+	//LUI	$1048575, X15				// b7f7ffff
 
 	SLL	X6, X5, X7				// b3936200
 	SLL	X5, X6					// 33135300
@@ -89,15 +89,15 @@ start:
 	// to 2 because they transfer control to the second instruction
 	// in the function (the first instruction being an invisible
 	// stack pointer adjustment).
-	JAL	X5, start	// JAL	X5, 2		// eff2dff0
+	JAL	X5, start	// JAL	X5, 2		// eff25ff1
 	JALR	X6, (X5)				// 67830200
 	JALR	X6, 4(X5)				// 67834200
-	BEQ	X5, X6, start	// BEQ	X5, X6, 2	// e38062f0
-	BNE	X5, X6, start	// BNE	X5, X6, 2	// e39e62ee
-	BLT	X5, X6, start	// BLT	X5, X6, 2	// e3cc62ee
-	BLTU	X5, X6, start	// BLTU	X5, X6, 2	// e3ea62ee
-	BGE	X5, X6, start	// BGE	X5, X6, 2	// e3d862ee
-	BGEU	X5, X6, start	// BGEU	X5, X6, 2	// e3f662ee
+	BEQ	X5, X6, start	// BEQ	X5, X6, 2	// e38462f0
+	BNE	X5, X6, start	// BNE	X5, X6, 2	// e39262f0
+	BLT	X5, X6, start	// BLT	X5, X6, 2	// e3c062f0
+	BLTU	X5, X6, start	// BLTU	X5, X6, 2	// e3ee62ee
+	BGE	X5, X6, start	// BGE	X5, X6, 2	// e3dc62ee
+	BGEU	X5, X6, start	// BGEU	X5, X6, 2	// e3fa62ee
 
 	// 2.6: Load and Store Instructions
 	LW	(X5), X6				// 03a30200
@@ -271,7 +271,7 @@ start:
 	// These jumps can get printed as jumps to 2 because they go to the
 	// second instruction in the function.  (The first instruction is an
 	// invisible stack pointer adjustment.)
-	JMP	start		// JMP	2	// 6ff01ff8
+	JMP	start		// JMP	2	// 6ff0dfcd
 	JMP	(X5)				// 67800200
 	JMP	4(X5)				// 67804200
 

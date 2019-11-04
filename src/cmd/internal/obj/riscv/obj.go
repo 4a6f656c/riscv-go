@@ -1480,7 +1480,7 @@ func validateU(p *obj.Prog) {
 		// to represent this state?
 		return
 	}
-	wantImmU(p, "from", p.From, 20)
+	wantImmI(p, "from", p.From, 20)
 	wantIntRegAddr(p, "to", &p.To)
 }
 
@@ -1601,7 +1601,7 @@ func encodeU(p *obj.Prog) uint32 {
 	// Rather than have the user/compiler generate a 32 bit constant, the
 	// bottommost bits of which must all be zero, instead accept just the
 	// top bits.
-	imm := immU(p.From, 20)
+	imm := immI(p.From, 20)
 	rd := regIAddr(p.To)
 	ins := encode(p.As)
 	if ins == nil {
@@ -1650,7 +1650,7 @@ func EncodeSImmediate(imm int64) (int64, error) {
 }
 
 func EncodeUImmediate(imm int64) (int64, error) {
-	if !immUFits(imm, 20) {
+	if !immIFits(imm, 20) {
 		return 0, fmt.Errorf("immediate %#x does not fit in 20 bits", imm)
 	}
 	return imm << 12, nil
