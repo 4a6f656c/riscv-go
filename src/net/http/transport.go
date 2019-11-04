@@ -218,7 +218,7 @@ type Transport struct {
 	ExpectContinueTimeout time.Duration
 
 	// TLSNextProto specifies how the Transport switches to an
-	// alternate protocol (such as HTTP/2) after a TLS NPN/ALPN
+	// alternate protocol (such as HTTP/2) after a TLS ALPN
 	// protocol negotiation. If Transport dials an TLS connection
 	// with a non-empty protocol name and TLSNextProto contains a
 	// map entry for that key (such as "h2"), then the func is
@@ -469,10 +469,12 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 	if isHTTP {
 		for k, vv := range req.Header {
 			if !httpguts.ValidHeaderFieldName(k) {
+				req.closeBody()
 				return nil, fmt.Errorf("net/http: invalid header field name %q", k)
 			}
 			for _, v := range vv {
 				if !httpguts.ValidHeaderFieldValue(v) {
+					req.closeBody()
 					return nil, fmt.Errorf("net/http: invalid header field value %q for key %v", v, k)
 				}
 			}
@@ -492,6 +494,7 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 		return nil, &badStringError{"unsupported protocol scheme", scheme}
 	}
 	if req.Method != "" && !validMethod(req.Method) {
+		req.closeBody()
 		return nil, fmt.Errorf("net/http: invalid method %q", req.Method)
 	}
 	if req.URL.Host == "" {
@@ -537,10 +540,16 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 		if err == nil {
 			return resp, nil
 		}
-		if http2isNoCachedConnError(err) {
-			t.removeIdleConn(pconn)
-			t.decConnsPerHost(pconn.cacheKey)
-		} else if !pconn.shouldRetryRequest(req, err) {
+
+		// Failed. Clean up and determine whether to retry.
+
+		_, isH2DialError := pconn.alt.(http2erringRoundTripper)
+		if http2isNoCachedConnError(err) || isH2DialError {
+			if t.removeIdleConn(pconn) {
+				t.decConnsPerHost(pconn.cacheKey)
+			}
+		}
+		if !pconn.shouldRetryRequest(req, err) {
 			// Issue 16465: return underlying net.Conn.Read error from peek,
 			// as we've historically done.
 			if e, ok := err.(transportReadFromServerError); ok {
@@ -950,26 +959,28 @@ func (t *Transport) queueForIdleConn(w *wantConn) (delivered bool) {
 }
 
 // removeIdleConn marks pconn as dead.
-func (t *Transport) removeIdleConn(pconn *persistConn) {
+func (t *Transport) removeIdleConn(pconn *persistConn) bool {
 	t.idleMu.Lock()
 	defer t.idleMu.Unlock()
-	t.removeIdleConnLocked(pconn)
+	return t.removeIdleConnLocked(pconn)
 }
 
 // t.idleMu must be held.
-func (t *Transport) removeIdleConnLocked(pconn *persistConn) {
+func (t *Transport) removeIdleConnLocked(pconn *persistConn) bool {
 	if pconn.idleTimer != nil {
 		pconn.idleTimer.Stop()
 	}
 	t.idleLRU.remove(pconn)
 	key := pconn.cacheKey
 	pconns := t.idleConn[key]
+	var removed bool
 	switch len(pconns) {
 	case 0:
 		// Nothing
 	case 1:
 		if pconns[0] == pconn {
 			delete(t.idleConn, key)
+			removed = true
 		}
 	default:
 		for i, v := range pconns {
@@ -980,9 +991,11 @@ func (t *Transport) removeIdleConnLocked(pconn *persistConn) {
 			// conns at the end.
 			copy(pconns[i:], pconns[i+1:])
 			t.idleConn[key] = pconns[:len(pconns)-1]
+			removed = true
 			break
 		}
 	}
+	return removed
 }
 
 func (t *Transport) setReqCanceler(r *Request, fn func(error)) {

@@ -6,13 +6,6 @@ package modload
 
 import (
 	"bytes"
-	"cmd/go/internal/base"
-	"cmd/go/internal/cfg"
-	"cmd/go/internal/modfetch"
-	"cmd/go/internal/modinfo"
-	"cmd/go/internal/module"
-	"cmd/go/internal/search"
-	"cmd/go/internal/semver"
 	"encoding/hex"
 	"fmt"
 	"internal/goroot"
@@ -20,6 +13,15 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+
+	"cmd/go/internal/base"
+	"cmd/go/internal/cfg"
+	"cmd/go/internal/modfetch"
+	"cmd/go/internal/modinfo"
+	"cmd/go/internal/search"
+
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 )
 
 var (
@@ -119,13 +121,8 @@ func moduleInfo(m module.Version, fromBuildList bool) *modinfo.ModulePublic {
 		info.GoVersion = loaded.goVersion[m.Path]
 	}
 
-	if cfg.BuildMod == "vendor" {
-		info.Dir = filepath.Join(ModRoot(), "vendor", m.Path)
-		return info
-	}
-
-	// complete fills in the extra fields in m.
-	complete := func(m *modinfo.ModulePublic) {
+	// completeFromModCache fills in the extra fields in m using the module cache.
+	completeFromModCache := func(m *modinfo.ModulePublic) {
 		if m.Version != "" {
 			if q, err := Query(m.Path, m.Version, "", nil); err != nil {
 				m.Error = &modinfo.ModuleError{Err: err.Error()}
@@ -151,13 +148,21 @@ func moduleInfo(m module.Version, fromBuildList bool) *modinfo.ModulePublic {
 	}
 
 	if !fromBuildList {
-		complete(info)
+		completeFromModCache(info) // Will set m.Error in vendor mode.
 		return info
 	}
 
 	r := Replacement(m)
 	if r.Path == "" {
-		complete(info)
+		if cfg.BuildMod == "vendor" {
+			// It's tempting to fill in the "Dir" field to point within the vendor
+			// directory, but that would be misleading: the vendor directory contains
+			// a flattened package tree, not complete modules, and it can even
+			// interleave packages from different modules if one module path is a
+			// prefix of the other.
+		} else {
+			completeFromModCache(info)
+		}
 		return info
 	}
 
@@ -176,10 +181,13 @@ func moduleInfo(m module.Version, fromBuildList bool) *modinfo.ModulePublic {
 		} else {
 			info.Replace.Dir = filepath.Join(ModRoot(), r.Path)
 		}
+		info.Replace.GoMod = filepath.Join(info.Replace.Dir, "go.mod")
 	}
-	complete(info.Replace)
-	info.Dir = info.Replace.Dir
-	info.GoMod = filepath.Join(info.Dir, "go.mod")
+	if cfg.BuildMod != "vendor" {
+		completeFromModCache(info.Replace)
+		info.Dir = info.Replace.Dir
+		info.GoMod = info.Replace.GoMod
+	}
 	return info
 }
 

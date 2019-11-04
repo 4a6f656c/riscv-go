@@ -12,12 +12,14 @@ import (
 	"strings"
 	"sync"
 
+	"cmd/go/internal/cfg"
 	"cmd/go/internal/imports"
 	"cmd/go/internal/modfetch"
-	"cmd/go/internal/module"
 	"cmd/go/internal/search"
-	"cmd/go/internal/semver"
 	"cmd/go/internal/str"
+
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 )
 
 // Query looks up a revision of a given module given a version query string.
@@ -61,9 +63,23 @@ func Query(path, query, current string, allowed func(module.Version) bool) (*mod
 	return info, err
 }
 
+var errQueryDisabled error = queryDisabledError{}
+
+type queryDisabledError struct{}
+
+func (queryDisabledError) Error() string {
+	if cfg.BuildModReason == "" {
+		return fmt.Sprintf("cannot query module due to -mod=%s", cfg.BuildMod)
+	}
+	return fmt.Sprintf("cannot query module due to -mod=%s\n\t(%s)", cfg.BuildMod, cfg.BuildModReason)
+}
+
 func queryProxy(proxy, path, query, current string, allowed func(module.Version) bool) (*modfetch.RevInfo, error) {
 	if current != "" && !semver.IsValid(current) {
 		return nil, fmt.Errorf("invalid previous version %q", current)
+	}
+	if cfg.BuildMod != "" && cfg.BuildMod != "mod" {
+		return nil, errQueryDisabled
 	}
 	if allowed == nil {
 		allowed = func(module.Version) bool { return true }
@@ -472,10 +488,10 @@ func queryPrefixModules(candidateModules []string, queryModule func(path string)
 					notExistErr = rErr
 				}
 			} else if err == nil {
-				if len(found) > 0 {
-					// golang.org/issue/34094: If we have already found a module
-					// containing the target package, ignore errors for modules with
-					// shorter paths.
+				if len(found) > 0 || noPackage != nil {
+					// golang.org/issue/34094: If we have already found a module that
+					// could potentially contain the target package, ignore unclassified
+					// errors for modules with shorter paths.
 
 					// golang.org/issue/34383 is a special case of this: if we have
 					// already found example.com/foo/v2@v2.0.0 with a matching go.mod

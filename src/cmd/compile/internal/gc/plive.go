@@ -670,7 +670,7 @@ func (lv *Liveness) markUnsafePoints() {
 		// single op that does the memory load from the flag
 		// address, so we look for that.
 		var load *ssa.Value
-		v := wbBlock.Control
+		v := wbBlock.Controls[0]
 		for {
 			if sym, ok := v.Aux.(*obj.LSym); ok && sym == writeBarrier {
 				load = v
@@ -866,7 +866,16 @@ func (lv *Liveness) solve() {
 					newliveout.vars.Set(pos)
 				}
 			case ssa.BlockExit:
-				// panic exit - nothing to do
+				if lv.fn.Func.HasDefer() && !lv.fn.Func.OpenCodedDeferDisallowed() {
+					// All stack slots storing args for open-coded
+					// defers are live at panic exit (since they
+					// will be used in running defers)
+					for i, n := range lv.vars {
+						if n.Name.OpenDeferSlot() {
+							newliveout.vars.Set(int32(i))
+						}
+					}
+				}
 			default:
 				// A variable is live on output from this block
 				// if it is live on input to some successor.
@@ -911,7 +920,7 @@ func (lv *Liveness) epilogue() {
 	if lv.fn.Func.HasDefer() {
 		for i, n := range lv.vars {
 			if n.Class() == PPARAMOUT {
-				if n.IsOutputParamHeapAddr() {
+				if n.Name.IsOutputParamHeapAddr() {
 					// Just to be paranoid.  Heap addresses are PAUTOs.
 					Fatalf("variable %v both output param and heap output param", n)
 				}
@@ -923,7 +932,7 @@ func (lv *Liveness) epilogue() {
 				// Note: zeroing is handled by zeroResults in walk.go.
 				livedefer.Set(int32(i))
 			}
-			if n.IsOutputParamHeapAddr() {
+			if n.Name.IsOutputParamHeapAddr() {
 				// This variable will be overwritten early in the function
 				// prologue (from the result of a mallocgc) but we need to
 				// zero it in case that malloc causes a stack scan.

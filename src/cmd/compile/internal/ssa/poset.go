@@ -9,6 +9,9 @@ import (
 	"os"
 )
 
+// If true, check poset integrity after every mutation
+var debugPoset = false
+
 const uintSize = 32 << (^uint(0) >> 32 & 1) // 32 or 64
 
 // bitset is a bit array for dense indexes.
@@ -39,16 +42,17 @@ func (bs bitset) Test(idx uint32) bool {
 type undoType uint8
 
 const (
-	undoInvalid    undoType = iota
-	undoCheckpoint          // a checkpoint to group undo passes
-	undoSetChl              // change back left child of undo.idx to undo.edge
-	undoSetChr              // change back right child of undo.idx to undo.edge
-	undoNonEqual            // forget that SSA value undo.ID is non-equal to undo.idx (another ID)
-	undoNewNode             // remove new node created for SSA value undo.ID
-	undoAliasNode           // unalias SSA value undo.ID so that it points back to node index undo.idx
-	undoNewRoot             // remove node undo.idx from root list
-	undoChangeRoot          // remove node undo.idx from root list, and put back undo.edge.Target instead
-	undoMergeRoot           // remove node undo.idx from root list, and put back its children instead
+	undoInvalid     undoType = iota
+	undoCheckpoint           // a checkpoint to group undo passes
+	undoSetChl               // change back left child of undo.idx to undo.edge
+	undoSetChr               // change back right child of undo.idx to undo.edge
+	undoNonEqual             // forget that SSA value undo.ID is non-equal to undo.idx (another ID)
+	undoNewNode              // remove new node created for SSA value undo.ID
+	undoNewConstant          // remove the constant node idx from the constants map
+	undoAliasNode            // unalias SSA value undo.ID so that it points back to node index undo.idx
+	undoNewRoot              // remove node undo.idx from root list
+	undoChangeRoot           // remove node undo.idx from root list, and put back undo.edge.Target instead
+	undoMergeRoot            // remove node undo.idx from root list, and put back its children instead
 )
 
 // posetUndo represents an undo pass to be performed.
@@ -143,23 +147,23 @@ type posetNode struct {
 //          J    K
 //
 type poset struct {
-	lastidx   uint32        // last generated dense index
-	flags     uint8         // internal flags
-	values    map[ID]uint32 // map SSA values to dense indexes
-	constants []*Value      // record SSA constants together with their value
-	nodes     []posetNode   // nodes (in all DAGs)
-	roots     []uint32      // list of root nodes (forest)
-	noneq     map[ID]bitset // non-equal relations
-	undo      []posetUndo   // undo chain
+	lastidx   uint32            // last generated dense index
+	flags     uint8             // internal flags
+	values    map[ID]uint32     // map SSA values to dense indexes
+	constants map[int64]uint32  // record SSA constants together with their value
+	nodes     []posetNode       // nodes (in all DAGs)
+	roots     []uint32          // list of root nodes (forest)
+	noneq     map[uint32]bitset // non-equal relations
+	undo      []posetUndo       // undo chain
 }
 
 func newPoset() *poset {
 	return &poset{
 		values:    make(map[ID]uint32),
-		constants: make([]*Value, 0, 8),
+		constants: make(map[int64]uint32, 8),
 		nodes:     make([]posetNode, 1, 16),
 		roots:     make([]uint32, 0, 4),
-		noneq:     make(map[ID]bitset),
+		noneq:     make(map[uint32]bitset),
 		undo:      make([]posetUndo, 0, 4),
 	}
 }
@@ -193,13 +197,18 @@ func (po *poset) upushnew(id ID, idx uint32) {
 }
 
 // upushneq pushes a new undo pass for a nonequal relation
-func (po *poset) upushneq(id1 ID, id2 ID) {
-	po.undo = append(po.undo, posetUndo{typ: undoNonEqual, ID: id1, idx: uint32(id2)})
+func (po *poset) upushneq(idx1 uint32, idx2 uint32) {
+	po.undo = append(po.undo, posetUndo{typ: undoNonEqual, ID: ID(idx1), idx: idx2})
 }
 
 // upushalias pushes a new undo pass for aliasing two nodes
 func (po *poset) upushalias(id ID, i2 uint32) {
 	po.undo = append(po.undo, posetUndo{typ: undoAliasNode, ID: id, idx: i2})
+}
+
+// upushconst pushes a new undo pass for a new constant
+func (po *poset) upushconst(idx uint32, old uint32) {
+	po.undo = append(po.undo, posetUndo{typ: undoNewConstant, idx: idx, ID: ID(old)})
 }
 
 // addchild adds i2 as direct child of i1.
@@ -278,18 +287,33 @@ func (po *poset) newconst(n *Value) {
 		panic("newconst on non-constant")
 	}
 
-	// If this is the first constant, put it into a new root, as
+	// If the same constant is already present in the poset through a different
+	// Value, just alias to it without allocating a new node.
+	val := n.AuxInt
+	if po.flags&posetFlagUnsigned != 0 {
+		val = int64(n.AuxUnsigned())
+	}
+	if c, found := po.constants[val]; found {
+		po.values[n.ID] = c
+		po.upushalias(n.ID, 0)
+		return
+	}
+
+	// Create the new node for this constant
+	i := po.newnode(n)
+
+	// If this is the first constant, put it as a new root, as
 	// we can't record an existing connection so we don't have
 	// a specific DAG to add it to. Notice that we want all
 	// constants to be in root #0, so make sure the new root
 	// goes there.
 	if len(po.constants) == 0 {
 		idx := len(po.roots)
-		i := po.newnode(n)
 		po.roots = append(po.roots, i)
 		po.roots[0], po.roots[idx] = po.roots[idx], po.roots[0]
 		po.upush(undoNewRoot, i, 0)
-		po.constants = append(po.constants, n)
+		po.constants[val] = i
+		po.upushconst(i, 0)
 		return
 	}
 
@@ -298,21 +322,20 @@ func (po *poset) newconst(n *Value) {
 	// and the lower constant that is higher.
 	// The loop is duplicated to handle signed and unsigned comparison,
 	// depending on how the poset was configured.
-	var lowerptr, higherptr *Value
+	var lowerptr, higherptr uint32
 
 	if po.flags&posetFlagUnsigned != 0 {
 		var lower, higher uint64
 		val1 := n.AuxUnsigned()
-		for _, ptr := range po.constants {
-			val2 := ptr.AuxUnsigned()
+		for val2, ptr := range po.constants {
+			val2 := uint64(val2)
 			if val1 == val2 {
-				po.aliasnode(ptr, n)
-				return
+				panic("unreachable")
 			}
-			if val2 < val1 && (lowerptr == nil || val2 > lower) {
+			if val2 < val1 && (lowerptr == 0 || val2 > lower) {
 				lower = val2
 				lowerptr = ptr
-			} else if val2 > val1 && (higherptr == nil || val2 < higher) {
+			} else if val2 > val1 && (higherptr == 0 || val2 < higher) {
 				higher = val2
 				higherptr = ptr
 			}
@@ -320,23 +343,21 @@ func (po *poset) newconst(n *Value) {
 	} else {
 		var lower, higher int64
 		val1 := n.AuxInt
-		for _, ptr := range po.constants {
-			val2 := ptr.AuxInt
+		for val2, ptr := range po.constants {
 			if val1 == val2 {
-				po.aliasnode(ptr, n)
-				return
+				panic("unreachable")
 			}
-			if val2 < val1 && (lowerptr == nil || val2 > lower) {
+			if val2 < val1 && (lowerptr == 0 || val2 > lower) {
 				lower = val2
 				lowerptr = ptr
-			} else if val2 > val1 && (higherptr == nil || val2 < higher) {
+			} else if val2 > val1 && (higherptr == 0 || val2 < higher) {
 				higher = val2
 				higherptr = ptr
 			}
 		}
 	}
 
-	if lowerptr == nil && higherptr == nil {
+	if lowerptr == 0 && higherptr == 0 {
 		// This should not happen, as at least one
 		// other constant must exist if we get here.
 		panic("no constant found")
@@ -347,18 +368,17 @@ func (po *poset) newconst(n *Value) {
 	// of them, depending on what other constants are present in the poset.
 	// Notice that we always link constants together, so they
 	// are always part of the same DAG.
-	i := po.newnode(n)
 	switch {
-	case lowerptr != nil && higherptr != nil:
+	case lowerptr != 0 && higherptr != 0:
 		// Both bounds are present, record lower < n < higher.
-		po.addchild(po.values[lowerptr.ID], i, true)
-		po.addchild(i, po.values[higherptr.ID], true)
+		po.addchild(lowerptr, i, true)
+		po.addchild(i, higherptr, true)
 
-	case lowerptr != nil:
+	case lowerptr != 0:
 		// Lower bound only, record lower < n.
-		po.addchild(po.values[lowerptr.ID], i, true)
+		po.addchild(lowerptr, i, true)
 
-	case higherptr != nil:
+	case higherptr != 0:
 		// Higher bound only. To record n < higher, we need
 		// a dummy root:
 		//
@@ -370,7 +390,7 @@ func (po *poset) newconst(n *Value) {
 		//       \    /
 		//       higher
 		//
-		i2 := po.values[higherptr.ID]
+		i2 := higherptr
 		r2 := po.findroot(i2)
 		if r2 != po.roots[0] { // all constants should be in root #0
 			panic("constant not in root #0")
@@ -383,46 +403,86 @@ func (po *poset) newconst(n *Value) {
 		po.addchild(i, i2, true)
 	}
 
-	po.constants = append(po.constants, n)
+	po.constants[val] = i
+	po.upushconst(i, 0)
 }
 
-// aliasnode records that n2 is an alias of n1
-func (po *poset) aliasnode(n1, n2 *Value) {
+// aliasnewnode records that a single node n2 (not in the poset yet) is an alias
+// of the master node n1.
+func (po *poset) aliasnewnode(n1, n2 *Value) {
+	i1, i2 := po.values[n1.ID], po.values[n2.ID]
+	if i1 == 0 || i2 != 0 {
+		panic("aliasnewnode invalid arguments")
+	}
+
+	po.values[n2.ID] = i1
+	po.upushalias(n2.ID, 0)
+}
+
+// aliasnodes records that all the nodes i2s are aliases of a single master node n1.
+// aliasnodes takes care of rearranging the DAG, changing references of parent/children
+// of nodes in i2s, so that they point to n1 instead.
+// Complexity is O(n) (with n being the total number of nodes in the poset, not just
+// the number of nodes being aliased).
+func (po *poset) aliasnodes(n1 *Value, i2s bitset) {
 	i1 := po.values[n1.ID]
 	if i1 == 0 {
 		panic("aliasnode for non-existing node")
 	}
+	if i2s.Test(i1) {
+		panic("aliasnode i2s contains n1 node")
+	}
 
-	i2 := po.values[n2.ID]
-	if i2 != 0 {
-		// Rename all references to i2 into i1
-		// (do not touch i1 itself, otherwise we can create useless self-loops)
-		for idx, n := range po.nodes {
-			if uint32(idx) != i1 {
-				l, r := n.l, n.r
-				if l.Target() == i2 {
-					po.setchl(uint32(idx), newedge(i1, l.Strict()))
-					po.upush(undoSetChl, uint32(idx), l)
-				}
-				if r.Target() == i2 {
-					po.setchr(uint32(idx), newedge(i1, r.Strict()))
-					po.upush(undoSetChr, uint32(idx), r)
-				}
-			}
+	// Go through all the nodes to adjust parent/chidlren of nodes in i2s
+	for idx, n := range po.nodes {
+		// Do not touch i1 itself, otherwise we can create useless self-loops
+		if uint32(idx) == i1 {
+			continue
+		}
+		l, r := n.l, n.r
+
+		// Rename all references to i2s into i1
+		if i2s.Test(l.Target()) {
+			po.setchl(uint32(idx), newedge(i1, l.Strict()))
+			po.upush(undoSetChl, uint32(idx), l)
+		}
+		if i2s.Test(r.Target()) {
+			po.setchr(uint32(idx), newedge(i1, r.Strict()))
+			po.upush(undoSetChr, uint32(idx), r)
 		}
 
-		// Reassign all existing IDs that point to i2 to i1.
-		// This includes n2.ID.
-		for k, v := range po.values {
-			if v == i2 {
-				po.values[k] = i1
-				po.upushalias(k, i2)
+		// Connect all chidren of i2s to i1 (unless those children
+		// are in i2s as well, in which case it would be useless)
+		if i2s.Test(uint32(idx)) {
+			if l != 0 && !i2s.Test(l.Target()) {
+				po.addchild(i1, l.Target(), l.Strict())
 			}
+			if r != 0 && !i2s.Test(r.Target()) {
+				po.addchild(i1, r.Target(), r.Strict())
+			}
+			po.setchl(uint32(idx), 0)
+			po.setchr(uint32(idx), 0)
+			po.upush(undoSetChl, uint32(idx), l)
+			po.upush(undoSetChr, uint32(idx), r)
 		}
-	} else {
-		// n2.ID wasn't seen before, so record it as alias to i1
-		po.values[n2.ID] = i1
-		po.upushalias(n2.ID, 0)
+	}
+
+	// Reassign all existing IDs that point to i2 to i1.
+	// This includes n2.ID.
+	for k, v := range po.values {
+		if i2s.Test(v) {
+			po.values[k] = i1
+			po.upushalias(k, v)
+		}
+	}
+
+	// If one of the aliased nodes is a constant, then make sure
+	// po.constants is updated to point to the master node.
+	for val, idx := range po.constants {
+		if i2s.Test(idx) {
+			po.constants[val] = i1
+			po.upushconst(i1, idx)
+		}
 	}
 }
 
@@ -569,57 +629,111 @@ func (po *poset) mergeroot(r1, r2 uint32) uint32 {
 	return r
 }
 
-// collapsepath marks i1 and i2 as equal and collapses as equal all
-// nodes across all paths between i1 and i2. If a strict edge is
+// collapsepath marks n1 and n2 as equal and collapses as equal all
+// nodes across all paths between n1 and n2. If a strict edge is
 // found, the function does not modify the DAG and returns false.
+// Complexity is O(n).
 func (po *poset) collapsepath(n1, n2 *Value) bool {
 	i1, i2 := po.values[n1.ID], po.values[n2.ID]
 	if po.reaches(i1, i2, true) {
 		return false
 	}
 
-	// TODO: for now, only handle the simple case of i2 being child of i1
-	l, r := po.children(i1)
-	if l.Target() == i2 || r.Target() == i2 {
-		po.aliasnode(n1, n2)
-		po.addchild(i1, i2, false)
-		return true
-	}
+	// Find all the paths from i1 to i2
+	paths := po.findpaths(i1, i2)
+	// Mark all nodes in all the paths as aliases of n1
+	// (excluding n1 itself)
+	paths.Clear(i1)
+	po.aliasnodes(n1, paths)
 	return true
 }
 
-// Check whether it is recorded that id1!=id2
-func (po *poset) isnoneq(id1, id2 ID) bool {
-	if id1 < id2 {
-		id1, id2 = id2, id1
+// findpaths is a recursive function that calculates all paths from cur to dst
+// and return them as a bitset (the index of a node is set in the bitset if
+// that node is on at least one path from cur to dst).
+// We do a DFS from cur (stopping going deep any time we reach dst, if ever),
+// and mark as part of the paths any node that has a children which is already
+// part of the path (or is dst itself).
+func (po *poset) findpaths(cur, dst uint32) bitset {
+	seen := newBitset(int(po.lastidx + 1))
+	path := newBitset(int(po.lastidx + 1))
+	path.Set(dst)
+	po.findpaths1(cur, dst, seen, path)
+	return path
+}
+
+func (po *poset) findpaths1(cur, dst uint32, seen bitset, path bitset) {
+	if cur == dst {
+		return
+	}
+	seen.Set(cur)
+	l, r := po.chl(cur), po.chr(cur)
+	if !seen.Test(l) {
+		po.findpaths1(l, dst, seen, path)
+	}
+	if !seen.Test(r) {
+		po.findpaths1(r, dst, seen, path)
+	}
+	if path.Test(l) || path.Test(r) {
+		path.Set(cur)
+	}
+}
+
+// Check whether it is recorded that i1!=i2
+func (po *poset) isnoneq(i1, i2 uint32) bool {
+	if i1 == i2 {
+		return false
+	}
+	if i1 < i2 {
+		i1, i2 = i2, i1
 	}
 
 	// Check if we recorded a non-equal relation before
-	if bs, ok := po.noneq[id1]; ok && bs.Test(uint32(id2)) {
+	if bs, ok := po.noneq[i1]; ok && bs.Test(i2) {
 		return true
 	}
 	return false
 }
 
-// Record that id1!=id2
-func (po *poset) setnoneq(id1, id2 ID) {
-	if id1 < id2 {
-		id1, id2 = id2, id1
+// Record that i1!=i2
+func (po *poset) setnoneq(n1, n2 *Value) {
+	i1, f1 := po.lookup(n1)
+	i2, f2 := po.lookup(n2)
+
+	// If any of the nodes do not exist in the poset, allocate them. Since
+	// we don't know any relation (in the partial order) about them, they must
+	// become independent roots.
+	if !f1 {
+		i1 = po.newnode(n1)
+		po.roots = append(po.roots, i1)
+		po.upush(undoNewRoot, i1, 0)
 	}
-	bs := po.noneq[id1]
+	if !f2 {
+		i2 = po.newnode(n2)
+		po.roots = append(po.roots, i2)
+		po.upush(undoNewRoot, i2, 0)
+	}
+
+	if i1 == i2 {
+		panic("setnoneq on same node")
+	}
+	if i1 < i2 {
+		i1, i2 = i2, i1
+	}
+	bs := po.noneq[i1]
 	if bs == nil {
 		// Given that we record non-equality relations using the
-		// higher ID as a key, the bitsize will never change size.
+		// higher index as a key, the bitsize will never change size.
 		// TODO(rasky): if memory is a problem, consider allocating
-		// a small bitset and lazily grow it when higher IDs arrive.
-		bs = newBitset(int(id1))
-		po.noneq[id1] = bs
-	} else if bs.Test(uint32(id2)) {
+		// a small bitset and lazily grow it when higher indices arrive.
+		bs = newBitset(int(i1))
+		po.noneq[i1] = bs
+	} else if bs.Test(i2) {
 		// Already recorded
 		return
 	}
-	bs.Set(uint32(id2))
-	po.upushneq(id1, id2)
+	bs.Set(i2)
+	po.upushneq(i1, i2)
 }
 
 // CheckIntegrity verifies internal integrity of a poset. It is intended
@@ -628,11 +742,7 @@ func (po *poset) CheckIntegrity() {
 	// Record which index is a constant
 	constants := newBitset(int(po.lastidx + 1))
 	for _, c := range po.constants {
-		if idx, ok := po.values[c.ID]; !ok {
-			panic("node missing for constant")
-		} else {
-			constants.Set(idx)
-		}
+		constants.Set(c)
 	}
 
 	// Verify that each node appears in a single DAG, and that
@@ -729,15 +839,10 @@ func (po *poset) DotDump(fn string, title string) error {
 		names[i] = s
 	}
 
-	// Create constant mapping
+	// Create reverse constant mapping
 	consts := make(map[uint32]int64)
-	for _, v := range po.constants {
-		idx := po.values[v.ID]
-		if po.flags&posetFlagUnsigned != 0 {
-			consts[idx] = int64(v.AuxUnsigned())
-		} else {
-			consts[idx] = v.AuxInt
-		}
+	for val, idx := range po.constants {
+		consts[idx] = val
 	}
 
 	fmt.Fprintf(f, "digraph poset {\n")
@@ -785,6 +890,9 @@ func (po *poset) DotDump(fn string, title string) error {
 // to tell.
 // Complexity is O(n).
 func (po *poset) Ordered(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
 		panic("should not call Ordered with n1==n2")
 	}
@@ -803,6 +911,9 @@ func (po *poset) Ordered(n1, n2 *Value) bool {
 // to tell.
 // Complexity is O(n).
 func (po *poset) OrderedOrEqual(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
 		panic("should not call Ordered with n1==n2")
 	}
@@ -813,8 +924,7 @@ func (po *poset) OrderedOrEqual(n1, n2 *Value) bool {
 		return false
 	}
 
-	return i1 == i2 || po.reaches(i1, i2, false) ||
-		(po.reaches(i2, i1, false) && !po.reaches(i2, i1, true))
+	return i1 == i2 || po.reaches(i1, i2, false)
 }
 
 // Equal reports whether n1==n2. It returns false either when it is
@@ -822,6 +932,9 @@ func (po *poset) OrderedOrEqual(n1, n2 *Value) bool {
 // to tell.
 // Complexity is O(1).
 func (po *poset) Equal(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
 		panic("should not call Equal with n1==n2")
 	}
@@ -837,10 +950,23 @@ func (po *poset) Equal(n1, n2 *Value) bool {
 // Complexity is O(n) (because it internally calls Ordered to see if we
 // can infer n1!=n2 from n1<n2 or n2<n1).
 func (po *poset) NonEqual(n1, n2 *Value) bool {
-	if n1.ID == n2.ID {
-		panic("should not call Equal with n1==n2")
+	if debugPoset {
+		defer po.CheckIntegrity()
 	}
-	if po.isnoneq(n1.ID, n2.ID) {
+	if n1.ID == n2.ID {
+		panic("should not call NonEqual with n1==n2")
+	}
+
+	// If we never saw the nodes before, we don't
+	// have a recorded non-equality.
+	i1, f1 := po.lookup(n1)
+	i2, f2 := po.lookup(n2)
+	if !f1 || !f2 {
+		return false
+	}
+
+	// Check if we recored inequality
+	if po.isnoneq(i1, i2) {
 		return true
 	}
 
@@ -852,15 +978,10 @@ func (po *poset) NonEqual(n1, n2 *Value) bool {
 	return false
 }
 
-// setOrder records that n1<n2 or n1<=n2 (depending on strict).
+// setOrder records that n1<n2 or n1<=n2 (depending on strict). Returns false
+// if this is a contradiction.
 // Implements SetOrder() and SetOrderOrEqual()
 func (po *poset) setOrder(n1, n2 *Value, strict bool) bool {
-	// If we are trying to record n1<=n2 but we learned that n1!=n2,
-	// record n1<n2, as it provides more information.
-	if !strict && po.isnoneq(n1.ID, n2.ID) {
-		strict = true
-	}
-
 	i1, f1 := po.lookup(n1)
 	i2, f2 := po.lookup(n2)
 
@@ -917,6 +1038,12 @@ func (po *poset) setOrder(n1, n2 *Value, strict bool) bool {
 		// (that is, we cannot set n1<n2 if n1==n2).
 		if i1 == i2 {
 			return !strict
+		}
+
+		// If we are trying to record n1<=n2 but we learned that n1!=n2,
+		// record n1<n2, as it provides more information.
+		if !strict && po.isnoneq(i1, i2) {
+			strict = true
 		}
 
 		// Both n1 and n2 are in the poset. This is the complex part of the algorithm
@@ -983,6 +1110,9 @@ func (po *poset) setOrder(n1, n2 *Value, strict bool) bool {
 // SetOrder records that n1<n2. Returns false if this is a contradiction
 // Complexity is O(1) if n2 was never seen before, or O(n) otherwise.
 func (po *poset) SetOrder(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
 		panic("should not call SetOrder with n1==n2")
 	}
@@ -992,6 +1122,9 @@ func (po *poset) SetOrder(n1, n2 *Value) bool {
 // SetOrderOrEqual records that n1<=n2. Returns false if this is a contradiction
 // Complexity is O(1) if n2 was never seen before, or O(n) otherwise.
 func (po *poset) SetOrderOrEqual(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
 		panic("should not call SetOrder with n1==n2")
 	}
@@ -1002,13 +1135,11 @@ func (po *poset) SetOrderOrEqual(n1, n2 *Value) bool {
 // (that is, if it is already recorded that n1<n2 or n2<n1).
 // Complexity is O(1) if n2 was never seen before, or O(n) otherwise.
 func (po *poset) SetEqual(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
 		panic("should not call Add with n1==n2")
-	}
-
-	// If we recorded that n1!=n2, this is a contradiction.
-	if po.isnoneq(n1.ID, n2.ID) {
-		return false
 	}
 
 	i1, f1 := po.lookup(n1)
@@ -1019,15 +1150,20 @@ func (po *poset) SetEqual(n1, n2 *Value) bool {
 		i1 = po.newnode(n1)
 		po.roots = append(po.roots, i1)
 		po.upush(undoNewRoot, i1, 0)
-		po.aliasnode(n1, n2)
+		po.aliasnewnode(n1, n2)
 	case f1 && !f2:
-		po.aliasnode(n1, n2)
+		po.aliasnewnode(n1, n2)
 	case !f1 && f2:
-		po.aliasnode(n2, n1)
+		po.aliasnewnode(n2, n1)
 	case f1 && f2:
 		if i1 == i2 {
 			// Already aliased, ignore
 			return true
+		}
+
+		// If we recorded that n1!=n2, this is a contradiction.
+		if po.isnoneq(i1, i2) {
+			return false
 		}
 
 		// If we already knew that n1<=n2, we can collapse the path to
@@ -1048,11 +1184,9 @@ func (po *poset) SetEqual(n1, n2 *Value) bool {
 
 		// Set n2 as alias of n1. This will also update all the references
 		// to n2 to become references to n1
-		po.aliasnode(n1, n2)
-
-		// Connect i2 (now dummy) as child of i1. This allows to keep the correct
-		// order with its children.
-		po.addchild(i1, i2, false)
+		i2s := newBitset(int(po.lastidx) + 1)
+		i2s.Set(i2)
+		po.aliasnodes(n1, i2s)
 	}
 	return true
 }
@@ -1061,34 +1195,46 @@ func (po *poset) SetEqual(n1, n2 *Value) bool {
 // (that is, if it is already recorded that n1==n2).
 // Complexity is O(n).
 func (po *poset) SetNonEqual(n1, n2 *Value) bool {
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 	if n1.ID == n2.ID {
-		panic("should not call Equal with n1==n2")
+		panic("should not call SetNonEqual with n1==n2")
 	}
 
-	// See if we already know this
-	if po.isnoneq(n1.ID, n2.ID) {
+	// Check whether the nodes are already in the poset
+	i1, f1 := po.lookup(n1)
+	i2, f2 := po.lookup(n2)
+
+	// If either node wasn't present, we just record the new relation
+	// and exit.
+	if !f1 || !f2 {
+		po.setnoneq(n1, n2)
 		return true
 	}
 
-	// Check if we're contradicting an existing relation
+	// See if we already know this, in which case there's nothing to do.
+	if po.isnoneq(i1, i2) {
+		return true
+	}
+
+	// Check if we're contradicting an existing equality relation
 	if po.Equal(n1, n2) {
 		return false
 	}
 
 	// Record non-equality
-	po.setnoneq(n1.ID, n2.ID)
+	po.setnoneq(n1, n2)
 
 	// If we know that i1<=i2 but not i1<i2, learn that as we
 	// now know that they are not equal. Do the same for i2<=i1.
-	i1, f1 := po.lookup(n1)
-	i2, f2 := po.lookup(n2)
-	if f1 && f2 {
-		if po.reaches(i1, i2, false) && !po.reaches(i1, i2, true) {
-			po.addchild(i1, i2, true)
-		}
-		if po.reaches(i2, i1, false) && !po.reaches(i2, i1, true) {
-			po.addchild(i2, i1, true)
-		}
+	// Do this check only if both nodes were already in the DAG,
+	// otherwise there cannot be an existing relation.
+	if po.reaches(i1, i2, false) && !po.reaches(i1, i2, true) {
+		po.addchild(i1, i2, true)
+	}
+	if po.reaches(i2, i1, false) && !po.reaches(i2, i1, true) {
+		po.addchild(i2, i1, true)
 	}
 
 	return true
@@ -1109,6 +1255,9 @@ func (po *poset) Undo() {
 	if len(po.undo) == 0 {
 		panic("empty undo stack")
 	}
+	if debugPoset {
+		defer po.CheckIntegrity()
+	}
 
 	for len(po.undo) > 0 {
 		pass := po.undo[len(po.undo)-1]
@@ -1125,7 +1274,7 @@ func (po *poset) Undo() {
 			po.setchr(pass.idx, pass.edge)
 
 		case undoNonEqual:
-			po.noneq[pass.ID].Clear(pass.idx)
+			po.noneq[uint32(pass.ID)].Clear(pass.idx)
 
 		case undoNewNode:
 			if pass.idx != po.lastidx {
@@ -1142,10 +1291,25 @@ func (po *poset) Undo() {
 			po.nodes = po.nodes[:pass.idx]
 			po.lastidx--
 
-			// If it was the last inserted constant, remove it
-			nc := len(po.constants)
-			if nc > 0 && po.constants[nc-1].ID == pass.ID {
-				po.constants = po.constants[:nc-1]
+		case undoNewConstant:
+			// FIXME: remove this O(n) loop
+			var val int64
+			var i uint32
+			for val, i = range po.constants {
+				if i == pass.idx {
+					break
+				}
+			}
+			if i != pass.idx {
+				panic("constant not found in undo pass")
+			}
+			if pass.ID == 0 {
+				delete(po.constants, val)
+			} else {
+				// Restore previous index as constant node
+				// (also restoring the invariant on correct bounds)
+				oldidx := uint32(pass.ID)
+				po.constants[val] = oldidx
 			}
 
 		case undoAliasNode:
@@ -1187,5 +1351,9 @@ func (po *poset) Undo() {
 		default:
 			panic(pass.typ)
 		}
+	}
+
+	if debugPoset && po.CheckEmpty() != nil {
+		panic("poset not empty at the end of undo")
 	}
 }

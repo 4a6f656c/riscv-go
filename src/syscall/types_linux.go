@@ -116,7 +116,7 @@ struct my_epoll_event {
 	// alignment requirements of EABI
 	int32_t padFd;
 #endif
-#if defined(__powerpc64__) || defined(__s390x__)
+#if defined(__powerpc64__) || defined(__s390x__) || (defined(__riscv_xlen) && __riscv_xlen == 64)
 	int32_t _padFd;
 #endif
 	int32_t fd;
@@ -415,6 +415,8 @@ const (
 	_AT_SYMLINK_NOFOLLOW = C.AT_SYMLINK_NOFOLLOW
 	_AT_EACCESS          = C.AT_EACCESS
 )
+
+type pollFd C.struct_pollfd
 
 // Terminal handling
 

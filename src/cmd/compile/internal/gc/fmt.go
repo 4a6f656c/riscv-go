@@ -6,6 +6,7 @@ package gc
 
 import (
 	"cmd/compile/internal/types"
+	"cmd/internal/src"
 	"fmt"
 	"io"
 	"strconv"
@@ -416,16 +417,19 @@ func (n *Node) format(s fmt.State, verb rune, mode fmtMode) {
 func (n *Node) jconv(s fmt.State, flag FmtFlag) {
 	c := flag & FmtShort
 
-	if c == 0 && n.Addable() {
-		fmt.Fprintf(s, " a(%v)", n.Addable())
-	}
-
 	if c == 0 && n.Name != nil && n.Name.Vargen != 0 {
 		fmt.Fprintf(s, " g(%d)", n.Name.Vargen)
 	}
 
 	if n.Pos.IsKnown() {
-		fmt.Fprintf(s, " l(%d)", n.Pos.Line())
+		pfx := ""
+		switch n.Pos.IsStmt() {
+		case src.PosNotStmt:
+			pfx = "_" // "-" would be confusing
+		case src.PosIsStmt:
+			pfx = "+"
+		}
+		fmt.Fprintf(s, " l(%s%d)", pfx, n.Pos.Line())
 	}
 
 	if c == 0 && n.Xoffset != BADWIDTH {
@@ -479,12 +483,13 @@ func (n *Node) jconv(s fmt.State, flag FmtFlag) {
 		fmt.Fprintf(s, " embedded")
 	}
 
-	if n.Addrtaken() {
-		fmt.Fprint(s, " addrtaken")
-	}
-
-	if n.Assigned() {
-		fmt.Fprint(s, " assigned")
+	if n.Op == ONAME {
+		if n.Name.Addrtaken() {
+			fmt.Fprint(s, " addrtaken")
+		}
+		if n.Name.Assigned() {
+			fmt.Fprint(s, " assigned")
+		}
 	}
 	if n.Bounded() {
 		fmt.Fprint(s, " bounded")

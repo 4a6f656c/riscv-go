@@ -15,11 +15,11 @@ import (
 // unconditional panic (hence no return from the function)
 func TestUnconditionalPanic(t *testing.T) {
 	defer func() {
-		if recover() == nil {
+		if recover() != "testUnconditional" {
 			t.Fatal("expected unconditional panic")
 		}
 	}()
-	panic("panic should be recovered")
+	panic("testUnconditional")
 }
 
 var glob int = 3
@@ -30,7 +30,7 @@ func TestOpenAndNonOpenDefers(t *testing.T) {
 	for {
 		// Non-open defer because in a loop
 		defer func(n int) {
-			if recover() == nil {
+			if recover() != "testNonOpenDefer" {
 				t.Fatal("expected testNonOpen panic")
 			}
 		}(3)
@@ -45,7 +45,7 @@ func TestOpenAndNonOpenDefers(t *testing.T) {
 //go:noinline
 func testOpen(t *testing.T, arg int) {
 	defer func(n int) {
-		if recover() == nil {
+		if recover() != "testOpenDefer" {
 			t.Fatal("expected testOpen panic")
 		}
 	}(4)
@@ -61,7 +61,7 @@ func TestNonOpenAndOpenDefers(t *testing.T) {
 	for {
 		// Non-open defer because in a loop
 		defer func(n int) {
-			if recover() == nil {
+			if recover() != "testNonOpenDefer" {
 				t.Fatal("expected testNonOpen panic")
 			}
 		}(3)
@@ -80,7 +80,7 @@ func TestConditionalDefers(t *testing.T) {
 	list = make([]int, 0, 10)
 
 	defer func() {
-		if recover() == nil {
+		if recover() != "testConditional" {
 			t.Fatal("expected panic")
 		}
 		want := []int{4, 2, 1}
@@ -106,7 +106,7 @@ func testConditionalDefers(n int) {
 			defer doappend(4)
 		}
 	}
-	panic("test")
+	panic("testConditional")
 }
 
 // Test that there is no compile-time or run-time error if an open-coded defer
@@ -173,4 +173,86 @@ func TestRecoverMatching(t *testing.T) {
 		}()
 	}()
 	panic("panic1")
+}
+
+type nonSSAable [128]byte
+
+type bigStruct struct {
+	x, y, z, w, p, q int64
+}
+
+type containsBigStruct struct {
+	element bigStruct
+}
+
+func mknonSSAable() nonSSAable {
+	globint1++
+	return nonSSAable{0, 0, 0, 0, 5}
+}
+
+var globint1, globint2, globint3 int
+
+//go:noinline
+func sideeffect(n int64) int64 {
+	globint2++
+	return n
+}
+
+func sideeffect2(in containsBigStruct) containsBigStruct {
+	globint3++
+	return in
+}
+
+// Test that nonSSAable arguments to defer are handled correctly and only evaluated once.
+func TestNonSSAableArgs(t *testing.T) {
+	globint1 = 0
+	globint2 = 0
+	globint3 = 0
+	var save1 byte
+	var save2 int64
+	var save3 int64
+	var save4 int64
+
+	defer func() {
+		if globint1 != 1 {
+			t.Fatal(fmt.Sprintf("globint1:  wanted: 1, got %v", globint1))
+		}
+		if save1 != 5 {
+			t.Fatal(fmt.Sprintf("save1:  wanted: 5, got %v", save1))
+		}
+		if globint2 != 1 {
+			t.Fatal(fmt.Sprintf("globint2:  wanted: 1, got %v", globint2))
+		}
+		if save2 != 2 {
+			t.Fatal(fmt.Sprintf("save2:  wanted: 2, got %v", save2))
+		}
+		if save3 != 4 {
+			t.Fatal(fmt.Sprintf("save3:  wanted: 4, got %v", save3))
+		}
+		if globint3 != 1 {
+			t.Fatal(fmt.Sprintf("globint3:  wanted: 1, got %v", globint3))
+		}
+		if save4 != 4 {
+			t.Fatal(fmt.Sprintf("save1:  wanted: 4, got %v", save4))
+		}
+	}()
+
+	// Test function returning a non-SSAable arg
+	defer func(n nonSSAable) {
+		save1 = n[4]
+	}(mknonSSAable())
+	// Test composite literal that is not SSAable
+	defer func(b bigStruct) {
+		save2 = b.y
+	}(bigStruct{1, 2, 3, 4, 5, sideeffect(6)})
+
+	// Test struct field reference that is non-SSAable
+	foo := containsBigStruct{}
+	foo.element.z = 4
+	defer func(element bigStruct) {
+		save3 = element.z
+	}(foo.element)
+	defer func(element bigStruct) {
+		save4 = element.z
+	}(sideeffect2(foo).element)
 }

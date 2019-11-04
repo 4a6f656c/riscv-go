@@ -1,4 +1,4 @@
-// Copyright 2016 The Go Authors. All rights reserved.
+// Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -14,24 +14,24 @@ TEXT ·Syscall(SB),NOSPLIT,$0-56
 	MOV	a1+8(FP), A0
 	MOV	a2+16(FP), A1
 	MOV	a3+24(FP), A2
-	MOV	$0, A3
-	MOV	$0, A4
-	MOV	$0, A5
-	MOV	$0, A6
+	//MOV	$0, A3
+	//MOV	$0, A4
+	//MOV	$0, A5
+	//MOV	$0, A6
 	MOV	trap+0(FP), A7	// syscall entry
 	ECALL
 	MOV	$-4096, T0
 	BLTU	T0, A0, err
 	MOV	A0, r1+32(FP)	// r1
 	MOV	A1, r2+40(FP)	// r2
-	MOV	ZERO, err+48(FP)	// errno
+	MOV	$0, err+48(FP)	// errno
 	CALL	runtime·exitsyscall(SB)
 	RET
 err:
 	MOV	$-1, T0
 	MOV	T0, r1+32(FP)	// r1
-	MOV	ZERO, r2+40(FP)	// r2
-	SUB	A0, ZERO, A0
+	MOV	$0, r2+40(FP)	// r2
+	SUB	A0, $0, A0
 	MOV	A0, err+48(FP)	// errno
 	CALL	runtime·exitsyscall(SB)
 	RET
@@ -45,21 +45,21 @@ TEXT ·Syscall6(SB),NOSPLIT,$0-80
 	MOV	a4+32(FP), A3
 	MOV	a5+40(FP), A4
 	MOV	a6+48(FP), A5
-	MOV	$0, A6
+	//MOV	$0, A6
 	MOV	trap+0(FP), A7	// syscall entry
 	ECALL
 	MOV	$-4096, T0
 	BLTU	T0, A0, err
 	MOV	A0, r1+56(FP)	// r1
 	MOV	A1, r2+64(FP)	// r2
-	MOV	ZERO, err+72(FP)	// errno
+	MOV	$0, err+72(FP)	// errno
 	CALL	runtime·exitsyscall(SB)
 	RET
 err:
 	MOV	$-1, T0
 	MOV	T0, r1+56(FP)	// r1
-	MOV	ZERO, r2+64(FP)	// r2
-	SUB	A0, ZERO, A0
+	MOV	$0, r2+64(FP)	// r2
+	SUB	A0, $0, A0
 	MOV	A0, err+72(FP)	// errno
 	CALL	runtime·exitsyscall(SB)
 	RET
@@ -69,23 +69,23 @@ TEXT ·RawSyscall(SB),NOSPLIT,$0-56
 	MOV	a1+8(FP), A0
 	MOV	a2+16(FP), A1
 	MOV	a3+24(FP), A2
-	MOV	$0, A3
-	MOV	$0, A4
-	MOV	$0, A5
-	MOV	$0, A6
+	//MOV	$0, A3
+	//MOV	$0, A4
+	//MOV	$0, A5
+	//MOV	$0, A6
 	MOV	trap+0(FP), A7	// syscall entry
 	ECALL
 	MOV	$-4096, T0
 	BLTU	T0, A0, err
 	MOV	A0, r1+32(FP)	// r1
 	MOV	A1, r2+40(FP)	// r2
-	MOV	ZERO, err+48(FP)	// errno
+	MOV	$0, err+48(FP)	// errno
 	RET
 err:
 	MOV	$-1, T0
 	MOV	T0, r1+32(FP)	// r1
-	MOV	ZERO, r2+40(FP)	// r2
-	SUB	A0, ZERO, A0
+	MOV	$0, r2+40(FP)	// r2
+	SUB	A0, $0, A0
 	MOV	A0, err+48(FP)	// errno
 	RET
 
@@ -97,20 +97,20 @@ TEXT ·RawSyscall6(SB),NOSPLIT,$0-80
 	MOV	a4+32(FP), A3
 	MOV	a5+40(FP), A4
 	MOV	a6+48(FP), A5
-	MOV	$0, A6
+	//MOV	$0, A6
 	MOV	trap+0(FP), A7	// syscall entry
 	ECALL
 	MOV	$-4096, T0
 	BLTU	T0, A0, err
 	MOV	A0, r1+56(FP)	// r1
 	MOV	A1, r2+64(FP)	// r2
-	MOV	ZERO, err+72(FP)	// errno
+	MOV	$0, err+72(FP)	// errno
 	RET
 err:
 	MOV	$-1, T0
 	MOV	T0, r1+56(FP)	// r1
-	MOV	ZERO, r2+64(FP)	// r2
-	SUB	A0, ZERO, A0
+	MOV	$0, r2+64(FP)	// r2
+	SUB	A0, $0, A0
 	MOV	A0, err+72(FP)	// errno
 	RET
 
@@ -118,9 +118,9 @@ TEXT ·rawSyscallNoError(SB),NOSPLIT,$0-48
 	MOV	a1+8(FP), A0
 	MOV	a2+16(FP), A1
 	MOV	a3+24(FP), A2
-	MOV	ZERO, A3
-	MOV	ZERO, A4
-	MOV	ZERO, A5
+	//MOV	ZERO, A3
+	//MOV	ZERO, A4
+	//MOV	ZERO, A5
 	MOV	trap+0(FP), A7	// syscall entry
 	ECALL
 	MOV	A0, r1+32(FP)

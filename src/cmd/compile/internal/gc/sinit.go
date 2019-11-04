@@ -83,6 +83,9 @@ func (s *InitSchedule) staticcopy(l *Node, r *Node) bool {
 	if r.Name.Defn.Op != OAS {
 		return false
 	}
+	if r.Type.IsString() { // perhaps overwritten by cmd/link -X (#34675)
+		return false
+	}
 	orig := r
 	r = r.Name.Defn.Right
 
@@ -385,7 +388,7 @@ func isLiteral(n *Node) bool {
 }
 
 func (n *Node) isSimpleName() bool {
-	return n.Op == ONAME && n.Addable() && n.Class() != PAUTOHEAP && n.Class() != PEXTERN
+	return n.Op == ONAME && n.Class() != PAUTOHEAP && n.Class() != PEXTERN
 }
 
 func litas(l *Node, r *Node, init *Nodes) {
@@ -579,6 +582,16 @@ func fixedlit(ctxt initContext, kind initKind, n *Node, var_ *Node, init *Nodes)
 	}
 }
 
+func isSmallSliceLit(n *Node) bool {
+	if n.Op != OSLICELIT {
+		return false
+	}
+
+	r := n.Right
+
+	return smallintconst(r) && (n.Type.Elem().Width == 0 || r.Int64() <= smallArrayBytes/n.Type.Elem().Width)
+}
+
 func slicelit(ctxt initContext, n *Node, var_ *Node, init *Nodes) {
 	// make an array type corresponding the number of elements we have
 	t := types.NewArray(n.Type.Elem(), n.Right.Int64())
@@ -636,7 +649,7 @@ func slicelit(ctxt initContext, n *Node, var_ *Node, init *Nodes) {
 	var vstat *Node
 
 	mode := getdyn(n, true)
-	if mode&initConst != 0 {
+	if mode&initConst != 0 && !isSmallSliceLit(n) {
 		vstat = staticname(t)
 		if ctxt == inInitFunction {
 			vstat.Name.SetReadonly(true)
@@ -1005,7 +1018,7 @@ func stataddr(nam *Node, n *Node) bool {
 	switch n.Op {
 	case ONAME:
 		*nam = *n
-		return n.Addable()
+		return true
 
 	case ODOT:
 		if !stataddr(nam, n.Left) {

@@ -29,6 +29,12 @@ var (
 	//   s := []byte("...")   allocating [n]byte on the stack
 	// Note: the flag smallframes can update this value.
 	maxImplicitStackVarSize = int64(64 * 1024)
+
+	// smallArrayBytes is the maximum size of an array which is considered small.
+	// Small arrays will be initialized directly with a sequence of constant stores.
+	// Large arrays will be initialized by copying from a static temp.
+	// 256 bytes was chosen to minimize generated code + statictmp size.
+	smallArrayBytes = int64(256)
 )
 
 // isRuntimePkg reports whether p is package runtime.
@@ -54,16 +60,9 @@ const (
 	PPARAMOUT              // output results
 	PFUNC                  // global function
 
-	PDISCARD // discard during parse of duplicate import
 	// Careful: Class is stored in three bits in Node.flags.
-	// Adding a new Class will overflow that.
+	_ = uint((1 << 3) - iota) // static assert for iota <= (1 << 3)
 )
-
-func init() {
-	if PDISCARD != 7 {
-		panic("PDISCARD changed; does all Class values still fit in three bits?")
-	}
-}
 
 // note this is the runtime representation
 // of the compilers arrays.
@@ -241,8 +240,6 @@ var Ctxt *obj.Link
 
 var writearchive bool
 
-var Nacl bool
-
 var nodfp *Node
 
 var disable_checknil int
@@ -273,11 +270,6 @@ type Arch struct {
 	// SSAGenBlock emits end-of-block Progs. SSAGenValue should be called
 	// for all values in the block before SSAGenBlock.
 	SSAGenBlock func(s *SSAGenState, b, next *ssa.Block)
-
-	// ZeroAuto emits code to zero the given auto stack variable.
-	// ZeroAuto must not use any non-temporary registers.
-	// ZeroAuto will only be called for variables which contain a pointer.
-	ZeroAuto func(*Progs, *Node)
 }
 
 var thearch Arch
@@ -314,6 +306,8 @@ var (
 	racewriterange,
 	x86HasPOPCNT,
 	x86HasSSE41,
+	x86HasFMA,
+	armHasVFPv4,
 	arm64HasATOMICS,
 	typedmemclr,
 	typedmemmove,

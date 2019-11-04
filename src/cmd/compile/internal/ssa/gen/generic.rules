@@ -803,7 +803,7 @@
 
 // Putting struct{*byte} and similar into direct interfaces.
 (IMake typ (StructMake1 val)) -> (IMake typ val)
-(StructSelect [0] x:(IData _)) -> x
+(StructSelect [0] (IData x)) -> (IData x)
 
 // un-SSAable values use mem->mem copies
 (Store {t} dst (Load src mem) mem) && !fe.CanSSA(t.(*types.Type)) ->
@@ -823,9 +823,9 @@
 (Store _ (ArrayMake0) mem) -> mem
 (Store dst (ArrayMake1 e) mem) -> (Store {e.Type} dst e mem)
 
-// Putting [1]{*byte} and similar into direct interfaces.
+// Putting [1]*byte and similar into direct interfaces.
 (IMake typ (ArrayMake1 val)) -> (IMake typ val)
-(ArraySelect [0] x:(IData _)) -> x
+(ArraySelect [0] (IData x)) -> (IData x)
 
 // string ops
 // Decomposing StringMake and lowering of StringPtr and StringLen
@@ -879,8 +879,8 @@
 (NilCheck (GetG mem) mem) -> mem
 
 (If (Not cond) yes no) -> (If cond no yes)
-(If (ConstBool [c]) yes no) && c == 1 -> (First nil yes no)
-(If (ConstBool [c]) yes no) && c == 0 -> (First nil no yes)
+(If (ConstBool [c]) yes no) && c == 1 -> (First yes no)
+(If (ConstBool [c]) yes no) && c == 0 -> (First no yes)
 
 // Get rid of Convert ops for pointer arithmetic on unsafe.Pointer.
 (Convert (Add(64|32) (Convert ptr mem) off) mem) -> (Add(64|32) ptr off)

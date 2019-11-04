@@ -16,9 +16,10 @@ import (
 	"time"
 
 	"cmd/go/internal/modfetch/codehost"
-	"cmd/go/internal/modfile"
-	"cmd/go/internal/module"
-	"cmd/go/internal/semver"
+
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 )
 
 // A codeRepo implements modfetch.Repo using an underlying codehost.Repo.
@@ -159,7 +160,7 @@ func (r *codeRepo) Versions(prefix string) ([]string, error) {
 		if v == "" || v != module.CanonicalVersion(v) || IsPseudoVersion(v) {
 			continue
 		}
-		if err := module.MatchPathMajor(v, r.pathMajor); err != nil {
+		if err := module.CheckPathMajor(v, r.pathMajor); err != nil {
 			if r.codeDir == "" && r.pathMajor == "" && semver.Major(v) > "v1" {
 				incompatible = append(incompatible, v)
 			}
@@ -293,7 +294,7 @@ func (r *codeRepo) convert(info *codehost.RevInfo, statVers string) (*RevInfo, e
 				}
 			}
 
-			if err := module.MatchPathMajor(strings.TrimSuffix(info2.Version, "+incompatible"), r.pathMajor); err == nil {
+			if err := module.CheckPathMajor(strings.TrimSuffix(info2.Version, "+incompatible"), r.pathMajor); err == nil {
 				return nil, invalidf("+incompatible suffix not allowed: major version %s is compatible", semver.Major(info2.Version))
 			}
 		}
@@ -317,7 +318,7 @@ func (r *codeRepo) convert(info *codehost.RevInfo, statVers string) (*RevInfo, e
 			return checkGoMod()
 		}
 
-		if err := module.MatchPathMajor(info2.Version, r.pathMajor); err != nil {
+		if err := module.CheckPathMajor(info2.Version, r.pathMajor); err != nil {
 			if canUseIncompatible() {
 				info2.Version += "+incompatible"
 				return checkGoMod()
@@ -365,7 +366,7 @@ func (r *codeRepo) convert(info *codehost.RevInfo, statVers string) (*RevInfo, e
 			tagIsCanonical = true
 		}
 
-		if err := module.MatchPathMajor(v, r.pathMajor); err != nil {
+		if err := module.CheckPathMajor(v, r.pathMajor); err != nil {
 			if canUseIncompatible() {
 				return v + "+incompatible", tagIsCanonical
 			}
@@ -464,7 +465,7 @@ func (r *codeRepo) validatePseudoVersion(info *codehost.RevInfo, version string)
 		}
 	}()
 
-	if err := module.MatchPathMajor(version, r.pathMajor); err != nil {
+	if err := module.CheckPathMajor(version, r.pathMajor); err != nil {
 		return err
 	}
 
@@ -780,19 +781,16 @@ func (r *codeRepo) Zip(dst io.Writer, version string) error {
 		}
 	}
 
-	rev, dir, _, err := r.findDir(version)
+	rev, subdir, _, err := r.findDir(version)
 	if err != nil {
 		return err
 	}
-	dl, actualDir, err := r.code.ReadZip(rev, dir, codehost.MaxZipFile)
+	dl, err := r.code.ReadZip(rev, subdir, codehost.MaxZipFile)
 	if err != nil {
 		return err
 	}
 	defer dl.Close()
-	if actualDir != "" && !hasPathPrefix(dir, actualDir) {
-		return fmt.Errorf("internal error: downloading %v %v: dir=%q but actualDir=%q", r.modPath, rev, dir, actualDir)
-	}
-	subdir := strings.Trim(strings.TrimPrefix(dir, actualDir), "/")
+	subdir = strings.Trim(subdir, "/")
 
 	// Spool to local file.
 	f, err := ioutil.TempFile("", "go-codehost-")

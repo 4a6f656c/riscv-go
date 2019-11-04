@@ -5,6 +5,7 @@
 package ssa
 
 import (
+	"cmd/internal/src"
 	"fmt"
 	"math"
 )
@@ -163,7 +164,8 @@ type factsTable struct {
 	// order is a couple of partial order sets that record information
 	// about relations between SSA values in the signed and unsigned
 	// domain.
-	order [2]*poset
+	orderS *poset
+	orderU *poset
 
 	// known lower and upper bounds on individual values.
 	limits     map[ID]limit
@@ -186,10 +188,10 @@ var checkpointBound = limitFact{}
 
 func newFactsTable(f *Func) *factsTable {
 	ft := &factsTable{}
-	ft.order[0] = f.newPoset() // signed
-	ft.order[1] = f.newPoset() // unsigned
-	ft.order[0].SetUnsigned(false)
-	ft.order[1].SetUnsigned(true)
+	ft.orderS = f.newPoset()
+	ft.orderU = f.newPoset()
+	ft.orderS.SetUnsigned(false)
+	ft.orderU.SetUnsigned(true)
 	ft.facts = make(map[pair]relation)
 	ft.stack = make([]fact, 4)
 	ft.limits = make(map[ID]limit)
@@ -220,23 +222,23 @@ func (ft *factsTable) update(parent *Block, v, w *Value, d domain, r relation) {
 
 	if d == signed || d == unsigned {
 		var ok bool
-		idx := 0
+		order := ft.orderS
 		if d == unsigned {
-			idx = 1
+			order = ft.orderU
 		}
 		switch r {
 		case lt:
-			ok = ft.order[idx].SetOrder(v, w)
+			ok = order.SetOrder(v, w)
 		case gt:
-			ok = ft.order[idx].SetOrder(w, v)
+			ok = order.SetOrder(w, v)
 		case lt | eq:
-			ok = ft.order[idx].SetOrderOrEqual(v, w)
+			ok = order.SetOrderOrEqual(v, w)
 		case gt | eq:
-			ok = ft.order[idx].SetOrderOrEqual(w, v)
+			ok = order.SetOrderOrEqual(w, v)
 		case eq:
-			ok = ft.order[idx].SetEqual(v, w)
+			ok = order.SetEqual(v, w)
 		case lt | gt:
-			ok = ft.order[idx].SetNonEqual(v, w)
+			ok = order.SetNonEqual(v, w)
 		default:
 			panic("unknown relation")
 		}
@@ -587,6 +589,7 @@ func (ft *factsTable) isNonNegative(v *Value) bool {
 	}
 
 	// Check if the recorded limits can prove that the value is positive
+
 	if l, has := ft.limits[v.ID]; has && (l.min >= 0 || l.umax <= uint64(max)) {
 		return true
 	}
@@ -609,7 +612,7 @@ func (ft *factsTable) isNonNegative(v *Value) bool {
 	}
 
 	// Check if the signed poset can prove that the value is >= 0
-	return ft.order[0].OrderedOrEqual(ft.zero, v)
+	return ft.orderS.OrderedOrEqual(ft.zero, v)
 }
 
 // checkpoint saves the current state of known relations.
@@ -620,8 +623,8 @@ func (ft *factsTable) checkpoint() {
 	}
 	ft.stack = append(ft.stack, checkpointFact)
 	ft.limitStack = append(ft.limitStack, checkpointBound)
-	ft.order[0].Checkpoint()
-	ft.order[1].Checkpoint()
+	ft.orderS.Checkpoint()
+	ft.orderU.Checkpoint()
 }
 
 // restore restores known relation to the state just
@@ -657,8 +660,8 @@ func (ft *factsTable) restore() {
 			ft.limits[old.vid] = old.limit
 		}
 	}
-	ft.order[0].Undo()
-	ft.order[1].Undo()
+	ft.orderS.Undo()
+	ft.orderU.Undo()
 }
 
 func lessByID(v, w *Value) bool {
@@ -921,7 +924,7 @@ func prove(f *Func) {
 	ft.restore()
 
 	// Return the posets to the free list
-	for _, po := range ft.order {
+	for _, po := range []*poset{ft.orderS, ft.orderU} {
 		// Make sure it's empty as it should be. A non-empty poset
 		// might cause errors and miscompilations if reused.
 		if checkEnabled {
@@ -979,7 +982,7 @@ func addIndVarRestrictions(ft *factsTable, b *Block, iv indVar) {
 // addBranchRestrictions updates the factsTables ft with the facts learned when
 // branching from Block b in direction br.
 func addBranchRestrictions(ft *factsTable, b *Block, br branch) {
-	c := b.Control
+	c := b.Controls[0]
 	switch br {
 	case negative:
 		addRestrictions(b, ft, boolean, nil, c, eq)
@@ -988,14 +991,14 @@ func addBranchRestrictions(ft *factsTable, b *Block, br branch) {
 	default:
 		panic("unknown branch")
 	}
-	if tr, has := domainRelationTable[b.Control.Op]; has {
+	if tr, has := domainRelationTable[c.Op]; has {
 		// When we branched from parent we learned a new set of
 		// restrictions. Update the factsTable accordingly.
 		d := tr.d
 		if d == signed && ft.isNonNegative(c.Args[0]) && ft.isNonNegative(c.Args[1]) {
 			d |= unsigned
 		}
-		switch b.Control.Op {
+		switch c.Op {
 		case OpIsInBounds, OpIsSliceInBounds:
 			// 0 <= a0 < a1 (or 0 <= a0 <= a1)
 			//
@@ -1096,6 +1099,7 @@ func addLocalInductiveFacts(ft *factsTable, b *Block) {
 			if pred.Kind != BlockIf {
 				continue
 			}
+			control := pred.Controls[0]
 
 			br := unknown
 			if pred.Succs[0].b == child {
@@ -1108,7 +1112,7 @@ func addLocalInductiveFacts(ft *factsTable, b *Block) {
 				br = negative
 			}
 
-			tr, has := domainRelationTable[pred.Control.Op]
+			tr, has := domainRelationTable[control.Op]
 			if !has {
 				continue
 			}
@@ -1121,10 +1125,10 @@ func addLocalInductiveFacts(ft *factsTable, b *Block) {
 
 			// Check for i2 < max or max > i2.
 			var max *Value
-			if r == lt && pred.Control.Args[0] == i2 {
-				max = pred.Control.Args[1]
-			} else if r == gt && pred.Control.Args[1] == i2 {
-				max = pred.Control.Args[0]
+			if r == lt && control.Args[0] == i2 {
+				max = control.Args[1]
+			} else if r == gt && control.Args[1] == i2 {
+				max = control.Args[0]
 			} else {
 				continue
 			}
@@ -1283,20 +1287,24 @@ func simplifyBlock(sdom SparseTree, ft *factsTable, b *Block) {
 }
 
 func removeBranch(b *Block, branch branch) {
+	c := b.Controls[0]
 	if b.Func.pass.debug > 0 {
 		verb := "Proved"
 		if branch == positive {
 			verb = "Disproved"
 		}
-		c := b.Control
 		if b.Func.pass.debug > 1 {
 			b.Func.Warnl(b.Pos, "%s %s (%s)", verb, c.Op, c)
 		} else {
 			b.Func.Warnl(b.Pos, "%s %s", verb, c.Op)
 		}
 	}
+	if c != nil && c.Pos.IsStmt() == src.PosIsStmt && c.Pos.SameFileAndLine(b.Pos) {
+		// attempt to preserve statement marker.
+		b.Pos = b.Pos.WithIsStmt()
+	}
 	b.Kind = BlockFirst
-	b.SetControl(nil)
+	b.ResetControls()
 	if branch == positive {
 		b.swapSuccessors()
 	}

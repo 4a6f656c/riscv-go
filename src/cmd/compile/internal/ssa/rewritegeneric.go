@@ -6142,18 +6142,18 @@ func rewriteValuegeneric_OpArraySelect_0(v *Value) bool {
 		v.AddArg(x)
 		return true
 	}
-	// match: (ArraySelect [0] x:(IData _))
-	// result: x
+	// match: (ArraySelect [0] (IData x))
+	// result: (IData x)
 	for {
 		if v.AuxInt != 0 {
 			break
 		}
-		x := v.Args[0]
-		if x.Op != OpIData {
+		v_0 := v.Args[0]
+		if v_0.Op != OpIData {
 			break
 		}
-		v.reset(OpCopy)
-		v.Type = x.Type
+		x := v_0.Args[0]
+		v.reset(OpIData)
 		v.AddArg(x)
 		return true
 	}
@@ -43502,18 +43502,18 @@ func rewriteValuegeneric_OpStructSelect_10(v *Value) bool {
 		v0.AddArg(mem)
 		return true
 	}
-	// match: (StructSelect [0] x:(IData _))
-	// result: x
+	// match: (StructSelect [0] (IData x))
+	// result: (IData x)
 	for {
 		if v.AuxInt != 0 {
 			break
 		}
-		x := v.Args[0]
-		if x.Op != OpIData {
+		v_0 := v.Args[0]
+		if v_0.Op != OpIData {
 			break
 		}
-		v.reset(OpCopy)
-		v.Type = x.Type
+		x := v_0.Args[0]
+		v.reset(OpIData)
 		v.AddArg(x)
 		return true
 	}
@@ -47407,43 +47407,40 @@ func rewriteValuegeneric_OpZeroExt8to64_0(v *Value) bool {
 	return false
 }
 func rewriteBlockgeneric(b *Block) bool {
-	v := b.Control
 	switch b.Kind {
 	case BlockIf:
 		// match: (If (Not cond) yes no)
 		// result: (If cond no yes)
-		for v.Op == OpNot {
-			cond := v.Args[0]
-			b.Kind = BlockIf
-			b.SetControl(cond)
-			b.Aux = nil
+		for b.Controls[0].Op == OpNot {
+			v_0 := b.Controls[0]
+			cond := v_0.Args[0]
+			b.Reset(BlockIf)
+			b.AddControl(cond)
 			b.swapSuccessors()
 			return true
 		}
 		// match: (If (ConstBool [c]) yes no)
 		// cond: c == 1
-		// result: (First nil yes no)
-		for v.Op == OpConstBool {
-			c := v.AuxInt
+		// result: (First yes no)
+		for b.Controls[0].Op == OpConstBool {
+			v_0 := b.Controls[0]
+			c := v_0.AuxInt
 			if !(c == 1) {
 				break
 			}
-			b.Kind = BlockFirst
-			b.SetControl(nil)
-			b.Aux = nil
+			b.Reset(BlockFirst)
 			return true
 		}
 		// match: (If (ConstBool [c]) yes no)
 		// cond: c == 0
-		// result: (First nil no yes)
-		for v.Op == OpConstBool {
-			c := v.AuxInt
+		// result: (First no yes)
+		for b.Controls[0].Op == OpConstBool {
+			v_0 := b.Controls[0]
+			c := v_0.AuxInt
 			if !(c == 0) {
 				break
 			}
-			b.Kind = BlockFirst
-			b.SetControl(nil)
-			b.Aux = nil
+			b.Reset(BlockFirst)
 			b.swapSuccessors()
 			return true
 		}

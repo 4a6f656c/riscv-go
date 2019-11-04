@@ -96,10 +96,6 @@ func asmb(ctxt *ld.Link) {} // dummy
 // asmb writes the final WebAssembly module binary.
 // Spec: https://webassembly.github.io/spec/core/binary/modules.html
 func asmb2(ctxt *ld.Link) {
-	if ctxt.Debugvlog != 0 {
-		ctxt.Logf("%5.2f asmb\n", ld.Cputime())
-	}
-
 	types := []*wasmFuncType{
 		// For normal Go functions, the single parameter is PC_B,
 		// the return value is
@@ -296,10 +292,11 @@ func writeTableSec(ctxt *ld.Link, fns []*wasmFunc) {
 func writeMemorySec(ctxt *ld.Link) {
 	sizeOffset := writeSecHeader(ctxt, sectionMemory)
 
-	const (
-		initialSize  = 16 << 20 // 16MB, enough for runtime init without growing
-		wasmPageSize = 64 << 10 // 64KB
-	)
+	dataSection := ctxt.Syms.Lookup("runtime.data", 0).Sect
+	dataEnd := dataSection.Vaddr + dataSection.Length
+	var initialSize = dataEnd + 16<<20 // 16MB, enough for runtime init without growing
+
+	const wasmPageSize = 64 << 10 // 64KB
 
 	writeUleb128(ctxt.Out, 1)                        // number of memories
 	ctxt.Out.WriteByte(0x00)                         // no maximum memory size
@@ -541,6 +538,10 @@ func writeName(w nameWriter, name string) {
 }
 
 func writeUleb128(w io.ByteWriter, v uint64) {
+	if v < 128 {
+		w.WriteByte(uint8(v))
+		return
+	}
 	more := true
 	for more {
 		c := uint8(v & 0x7f)

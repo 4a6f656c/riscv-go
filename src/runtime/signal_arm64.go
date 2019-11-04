@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin linux netbsd openbsd
+// +build darwin freebsd linux netbsd openbsd
 
 package runtime
 
@@ -77,4 +77,10 @@ func (c *sigctxt) preparePanic(sig uint32, gp *g) {
 	// In case we are panicking from external C code
 	c.set_r28(uint64(uintptr(unsafe.Pointer(gp))))
 	c.set_pc(uint64(funcPC(sigpanic)))
+}
+
+const pushCallSupported = false
+
+func (c *sigctxt) pushCall(targetPC uintptr) {
+	throw("not implemented")
 }

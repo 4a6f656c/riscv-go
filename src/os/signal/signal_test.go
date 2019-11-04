@@ -22,12 +22,42 @@ import (
 	"time"
 )
 
+var testDeadline time.Time
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	// TODO(golang.org/issue/28135): Remove this setup and use t.Deadline instead.
+	timeoutFlag := flag.Lookup("test.timeout")
+	if timeoutFlag != nil {
+		if d := timeoutFlag.Value.(flag.Getter).Get().(time.Duration); d != 0 {
+			testDeadline = time.Now().Add(d)
+		}
+	}
+
+	os.Exit(m.Run())
+}
+
 func waitSig(t *testing.T, c <-chan os.Signal, sig os.Signal) {
+	waitSig1(t, c, sig, false)
+}
+func waitSigAll(t *testing.T, c <-chan os.Signal, sig os.Signal) {
+	waitSig1(t, c, sig, true)
+}
+
+func waitSig1(t *testing.T, c <-chan os.Signal, sig os.Signal, all bool) {
 	// Sleep multiple times to give the kernel more tries to
 	// deliver the signal.
 	for i := 0; i < 10; i++ {
 		select {
 		case s := <-c:
+			// If the caller notified for all signals on
+			// c, filter out SIGURG, which is used for
+			// runtime preemption and can come at
+			// unpredictable times.
+			if all && s == syscall.SIGURG {
+				continue
+			}
 			if s != sig {
 				t.Fatalf("signal was %v, want %v", s, sig)
 			}
@@ -58,17 +88,17 @@ func TestSignal(t *testing.T) {
 	// Send this process a SIGWINCH
 	t.Logf("sigwinch...")
 	syscall.Kill(syscall.Getpid(), syscall.SIGWINCH)
-	waitSig(t, c1, syscall.SIGWINCH)
+	waitSigAll(t, c1, syscall.SIGWINCH)
 
 	// Send two more SIGHUPs, to make sure that
 	// they get delivered on c1 and that not reading
 	// from c does not block everything.
 	t.Logf("sighup...")
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	waitSig(t, c1, syscall.SIGHUP)
+	waitSigAll(t, c1, syscall.SIGHUP)
 	t.Logf("sighup...")
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	waitSig(t, c1, syscall.SIGHUP)
+	waitSigAll(t, c1, syscall.SIGHUP)
 
 	// The first SIGHUP should be waiting for us on c.
 	waitSig(t, c, syscall.SIGHUP)
@@ -392,7 +422,11 @@ func TestAtomicStop(t *testing.T) {
 
 	const execs = 10
 	for i := 0; i < execs; i++ {
-		cmd := exec.Command(os.Args[0], "-test.run=TestAtomicStop")
+		timeout := "0"
+		if !testDeadline.IsZero() {
+			timeout = testDeadline.Sub(time.Now()).String()
+		}
+		cmd := exec.Command(os.Args[0], "-test.run=TestAtomicStop", "-test.timeout="+timeout)
 		cmd.Env = append(os.Environ(), "GO_TEST_ATOMIC_STOP=1")
 		out, err := cmd.CombinedOutput()
 		if err == nil {
@@ -431,6 +465,14 @@ func TestAtomicStop(t *testing.T) {
 // either catch a signal or die from it.
 func atomicStopTestProgram() {
 	const tries = 10
+
+	timeout := 2 * time.Second
+	if !testDeadline.IsZero() {
+		// Give each try an equal slice of the deadline, with one slice to spare for
+		// cleanup.
+		timeout = testDeadline.Sub(time.Now()) / (tries + 1)
+	}
+
 	pid := syscall.Getpid()
 	printed := false
 	for i := 0; i < tries; i++ {
@@ -453,7 +495,7 @@ func atomicStopTestProgram() {
 
 		select {
 		case <-cs:
-		case <-time.After(2 * time.Second):
+		case <-time.After(timeout):
 			if !printed {
 				fmt.Print("lost signal on tries:")
 				printed = true
@@ -468,4 +510,53 @@ func atomicStopTestProgram() {
 	}
 
 	os.Exit(0)
+}
+
+func TestTime(t *testing.T) {
+	// Test that signal works fine when we are in a call to get time,
+	// which on some platforms is using VDSO. See issue #34391.
+	dur := 3 * time.Second
+	if testing.Short() {
+		dur = 100 * time.Millisecond
+	}
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
+	done := make(chan bool)
+	finished := make(chan bool)
+	go func() {
+		sig := make(chan os.Signal, 1)
+		Notify(sig, syscall.SIGUSR1)
+		defer Stop(sig)
+	Loop:
+		for {
+			select {
+			case <-sig:
+			case <-done:
+				break Loop
+			}
+		}
+		finished <- true
+	}()
+	go func() {
+	Loop:
+		for {
+			select {
+			case <-done:
+				break Loop
+			default:
+				syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+				runtime.Gosched()
+			}
+		}
+		finished <- true
+	}()
+	t0 := time.Now()
+	for t1 := t0; t1.Sub(t0) < dur; t1 = time.Now() {
+	} // hammering on getting time
+	close(done)
+	<-finished
+	<-finished
+	// When run with 'go test -cpu=1,2,4' SIGUSR1 from this test can slip
+	// into subsequent TestSignal() causing failure.
+	// Sleep for a while to reduce the possibility of the failure.
+	time.Sleep(10 * time.Millisecond)
 }

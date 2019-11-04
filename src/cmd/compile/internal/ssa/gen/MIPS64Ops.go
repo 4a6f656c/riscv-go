@@ -367,6 +367,7 @@ func init() {
 
 		// atomic stores.
 		// store arg1 to arg0. arg2=mem. returns memory.
+		{name: "LoweredAtomicStore8", argLength: 3, reg: gpstore, faultOnNilArg0: true, hasSideEffects: true},
 		{name: "LoweredAtomicStore32", argLength: 3, reg: gpstore, faultOnNilArg0: true, hasSideEffects: true},
 		{name: "LoweredAtomicStore64", argLength: 3, reg: gpstore, faultOnNilArg0: true, hasSideEffects: true},
 		// store zero to arg0. arg1=mem. returns memory.
@@ -453,14 +454,14 @@ func init() {
 	}
 
 	blocks := []blockData{
-		{name: "EQ"},
-		{name: "NE"},
-		{name: "LTZ"}, // < 0
-		{name: "LEZ"}, // <= 0
-		{name: "GTZ"}, // > 0
-		{name: "GEZ"}, // >= 0
-		{name: "FPT"}, // FP flag is true
-		{name: "FPF"}, // FP flag is false
+		{name: "EQ", controls: 1},
+		{name: "NE", controls: 1},
+		{name: "LTZ", controls: 1}, // < 0
+		{name: "LEZ", controls: 1}, // <= 0
+		{name: "GTZ", controls: 1}, // > 0
+		{name: "GEZ", controls: 1}, // >= 0
+		{name: "FPT", controls: 1}, // FP flag is true
+		{name: "FPF", controls: 1}, // FP flag is false
 	}
 
 	archs = append(archs, arch{

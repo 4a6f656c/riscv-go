@@ -19,10 +19,11 @@ import (
 
 	"cmd/go/internal/base"
 	"cmd/go/internal/cfg"
-	"cmd/go/internal/dirhash"
-	"cmd/go/internal/module"
 	"cmd/go/internal/par"
 	"cmd/go/internal/renameio"
+
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/sumdb/dirhash"
 )
 
 var downloadCache par.Cache
@@ -68,10 +69,6 @@ func download(mod module.Version, dir string) (err error) {
 	zipfile, err := DownloadZip(mod)
 	if err != nil {
 		return err
-	}
-
-	if cfg.CmdName != "mod download" {
-		fmt.Fprintf(os.Stderr, "go: extracting %s %s\n", mod.Path, mod.Version)
 	}
 
 	unlock, err := lockVersion(mod)
@@ -125,9 +122,11 @@ func download(mod module.Version, dir string) (err error) {
 		return err
 	}
 
-	// Make dir read-only only *after* renaming it.
-	// os.Rename was observed to fail for read-only directories on macOS.
-	makeDirsReadOnly(dir)
+	if !cfg.ModCacheRW {
+		// Make dir read-only only *after* renaming it.
+		// os.Rename was observed to fail for read-only directories on macOS.
+		makeDirsReadOnly(dir)
+	}
 	return nil
 }
 
