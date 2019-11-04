@@ -32,7 +32,7 @@ type Symbol struct {
 	auxinfo     *AuxSymbol
 	Sect        *Section
 	FuncInfo    *FuncInfo
-	Lib         *Library // Package defining this symbol
+	Unit        *CompilationUnit
 	// P contains the raw symbol data.
 	P []byte
 	R []Reloc
@@ -518,7 +518,6 @@ func SortSub(l *Symbol) *Symbol {
 type FuncInfo struct {
 	Args        int32
 	Locals      int32
-	Autom       []Auto
 	Pcsp        Pcdata
 	Pcfile      Pcdata
 	Pcline      Pcdata
@@ -541,11 +540,4 @@ type InlinedCall struct {
 
 type Pcdata struct {
 	P []byte
-}
-
-type Auto struct {
-	Asym    *Symbol
-	Gotype  *Symbol
-	Aoffset int32
-	Name    int16
 }

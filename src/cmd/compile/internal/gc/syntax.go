@@ -600,10 +600,10 @@ const (
 	OSTR2RUNES    // Type(Left) (Type is []rune, Left is a string)
 	OAS           // Left = Right or (if Colas=true) Left := Right
 	OAS2          // List = Rlist (x, y, z = a, b, c)
-	OAS2DOTTYPE   // List = Rlist (x, ok = I.(int))
-	OAS2FUNC      // List = Rlist (x, y = f())
-	OAS2MAPR      // List = Rlist (x, ok = m["foo"])
-	OAS2RECV      // List = Rlist (x, ok = <-c)
+	OAS2DOTTYPE   // List = Right (x, ok = I.(int))
+	OAS2FUNC      // List = Right (x, y = f())
+	OAS2MAPR      // List = Right (x, ok = m["foo"])
+	OAS2RECV      // List = Right (x, ok = <-c)
 	OASOP         // Left Etype= Right (x += y)
 	OCALL         // Left(List) (function call, method call or type conversion)
 
@@ -704,8 +704,7 @@ const (
 	// statements
 	OBLOCK    // { List } (block of code)
 	OBREAK    // break [Sym]
-	OCASE     // case Left or List[0]..List[1]: Nbody (select case after processing; Left==nil and List==nil means default)
-	OXCASE    // case List: Nbody (select case before processing; List==nil means default)
+	OCASE     // case List: Nbody (List==nil means default)
 	OCONTINUE // continue [Sym]
 	ODEFER    // defer Left (Left must be call)
 	OEMPTY    // no-op (empty statement)
@@ -727,8 +726,8 @@ const (
 	OGO     // go Left (Left must be call)
 	ORANGE  // for List = range Right { Nbody }
 	ORETURN // return List
-	OSELECT // select { List } (List is list of OXCASE or OCASE)
-	OSWITCH // switch Ninit; Left { List } (List is a list of OXCASE or OCASE)
+	OSELECT // select { List } (List is list of OCASE)
+	OSWITCH // switch Ninit; Left { List } (List is a list of OCASE)
 	OTYPESW // Left = Right.(type) (appears as .Left of OSWITCH)
 
 	// types

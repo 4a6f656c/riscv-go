@@ -237,7 +237,7 @@ func genRulesSuffix(arch arch, suff string) {
 	// so we can make this one function with a switch.
 	fn = &Func{kind: "Block"}
 	fn.add(declf("config", "b.Func.Config"))
-	fn.add(declf("typ", "&config.Types"))
+	fn.add(declf("typ", "&b.Func.Config.Types"))
 	fn.add(declf("v", "b.Control"))
 
 	sw = &Switch{expr: exprf("b.Kind")}
@@ -554,11 +554,13 @@ func fprint(w io.Writer, n Node) {
 		fmt.Fprintf(w, "// Code generated from gen/%s%s.rules; DO NOT EDIT.\n", n.arch.name, n.suffix)
 		fmt.Fprintf(w, "// generated with: cd gen; go run *.go\n")
 		fmt.Fprintf(w, "\npackage ssa\n")
-		for _, path := range []string{
-			"fmt", "math",
-			"cmd/internal/obj", "cmd/internal/objabi",
+		for _, path := range append([]string{
+			"fmt",
+			"math",
+			"cmd/internal/obj",
+			"cmd/internal/objabi",
 			"cmd/compile/internal/types",
-		} {
+		}, n.arch.imports...) {
 			fmt.Fprintf(w, "import %q\n", path)
 		}
 		for _, f := range n.list {
@@ -587,7 +589,9 @@ func fprint(w io.Writer, n Node) {
 		}
 	case *RuleRewrite:
 		fmt.Fprintf(w, "// match: %s\n", n.match)
-		fmt.Fprintf(w, "// cond: %s\n", n.cond)
+		if n.cond != "" {
+			fmt.Fprintf(w, "// cond: %s\n", n.cond)
+		}
 		fmt.Fprintf(w, "// result: %s\n", n.result)
 		if n.checkOp != "" {
 			fmt.Fprintf(w, "for v.Op == %s {\n", n.checkOp)
@@ -607,13 +611,17 @@ func fprint(w io.Writer, n Node) {
 		fprint(w, n.expr)
 		fmt.Fprintf(w, " {\nbreak\n}\n")
 	case ast.Node:
-		printer.Fprint(w, emptyFset, n)
+		printConfig.Fprint(w, emptyFset, n)
 		if _, ok := n.(ast.Stmt); ok {
 			fmt.Fprintln(w)
 		}
 	default:
 		log.Fatalf("cannot print %T", n)
 	}
+}
+
+var printConfig = printer.Config{
+	Mode: printer.RawFormat, // we use go/format later, so skip work here
 }
 
 var emptyFset = token.NewFileSet()
@@ -632,14 +640,26 @@ type bodyBase struct {
 	canFail bool
 }
 
-func (w *bodyBase) body() []Statement { return w.list }
-func (w *bodyBase) add(nodes ...Statement) {
-	w.list = append(w.list, nodes...)
-	for _, node := range nodes {
-		if _, ok := node.(*CondBreak); ok {
-			w.canFail = true
+func (w *bodyBase) add(node Statement) {
+	var last Statement
+	if len(w.list) > 0 {
+		last = w.list[len(w.list)-1]
+	}
+	if node, ok := node.(*CondBreak); ok {
+		w.canFail = true
+		if last, ok := last.(*CondBreak); ok {
+			// Add to the previous "if <cond> { break }" via a
+			// logical OR, which will save verbosity.
+			last.expr = &ast.BinaryExpr{
+				Op: token.LOR,
+				X:  last.expr,
+				Y:  node.expr,
+			}
+			return
 		}
 	}
+
+	w.list = append(w.list, node)
 }
 
 // declared reports if the body contains a Declare with the given name.
@@ -831,28 +851,21 @@ func genMatch0(rr *RuleRewrite, arch arch, match, v string) (pos, checkOp string
 		pos = v + ".Pos"
 	}
 
-	if typ != "" {
-		if !token.IsIdentifier(typ) || rr.declared(typ) {
-			// code or variable
-			rr.add(breakf("%s.Type != %s", v, typ))
-		} else {
-			rr.add(declf(typ, "%s.Type", v))
+	for _, e := range []struct {
+		name, field string
+	}{
+		{typ, "Type"},
+		{auxint, "AuxInt"},
+		{aux, "Aux"},
+	} {
+		if e.name == "" {
+			continue
 		}
-	}
-	if auxint != "" {
-		if !token.IsIdentifier(auxint) || rr.declared(auxint) {
+		if !token.IsIdentifier(e.name) || rr.declared(e.name) {
 			// code or variable
-			rr.add(breakf("%s.AuxInt != %s", v, auxint))
+			rr.add(breakf("%s.%s != %s", v, e.field, e.name))
 		} else {
-			rr.add(declf(auxint, "%s.AuxInt", v))
-		}
-	}
-	if aux != "" {
-		if !token.IsIdentifier(aux) || rr.declared(aux) {
-			// code or variable
-			rr.add(breakf("%s.Aux != %s", v, aux))
-		} else {
-			rr.add(declf(aux, "%s.Aux", v))
+			rr.add(declf(e.name, "%s.%s", v, e.field))
 		}
 	}
 
@@ -901,7 +914,6 @@ func genMatch0(rr *RuleRewrite, arch arch, match, v string) (pos, checkOp string
 		rr.add(declf(argname, "%s.Args[%d]", v, i))
 		bexpr := exprf("%s.Op != addLater", argname)
 		rr.add(&CondBreak{expr: bexpr})
-		rr.canFail = true // since we're not using breakf
 		argPos, argCheckOp := genMatch0(rr, arch, arg, argname)
 		bexpr.(*ast.BinaryExpr).Y.(*ast.Ident).Name = argCheckOp
 
@@ -1144,7 +1156,7 @@ func parseValue(val string, arch arch, loc string) (op opData, oparch, typ, auxi
 	}
 	if aux != "" {
 		switch op.aux {
-		case "String", "Sym", "SymOff", "SymValAndOff", "Typ", "TypSize", "CCop":
+		case "String", "Sym", "SymOff", "SymValAndOff", "Typ", "TypSize", "CCop", "ArchSpecific":
 		default:
 			log.Fatalf("%s: op %s %s can't have aux", loc, op.name, op.aux)
 		}

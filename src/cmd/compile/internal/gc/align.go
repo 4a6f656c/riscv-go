@@ -34,7 +34,7 @@ func expandiface(t *types.Type) {
 		switch prev := seen[m.Sym]; {
 		case prev == nil:
 			seen[m.Sym] = m
-		case !explicit && types.Identical(m.Type, prev.Type):
+		case langSupported(1, 14) && !explicit && types.Identical(m.Type, prev.Type):
 			return
 		default:
 			yyerrorl(m.Pos, "duplicate method %s", m.Sym.Name)
@@ -322,13 +322,6 @@ func dowidth(t *types.Type) {
 
 	case TARRAY:
 		if t.Elem() == nil {
-			break
-		}
-		if t.IsDDDArray() {
-			if !t.Broke() {
-				yyerror("use of [...] array outside of array literal")
-				t.SetBroke(true)
-			}
 			break
 		}
 

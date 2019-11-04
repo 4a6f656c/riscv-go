@@ -275,9 +275,11 @@ func (o fmtOpTypeId) Format(s fmt.State, verb rune)     { Op(o).format(s, verb, 
 func (o fmtOpTypeIdName) Format(s fmt.State, verb rune) { Op(o).format(s, verb, FTypeIdName) }
 func (o Op) Format(s fmt.State, verb rune)              { o.format(s, verb, FErr) }
 
-func (t *fmtTypeErr) Format(s fmt.State, verb rune)    { typeFormat((*types.Type)(t), s, verb, FErr) }
-func (t *fmtTypeDbg) Format(s fmt.State, verb rune)    { typeFormat((*types.Type)(t), s, verb, FDbg) }
-func (t *fmtTypeTypeId) Format(s fmt.State, verb rune) { typeFormat((*types.Type)(t), s, verb, FTypeId) }
+func (t *fmtTypeErr) Format(s fmt.State, verb rune) { typeFormat((*types.Type)(t), s, verb, FErr) }
+func (t *fmtTypeDbg) Format(s fmt.State, verb rune) { typeFormat((*types.Type)(t), s, verb, FDbg) }
+func (t *fmtTypeTypeId) Format(s fmt.State, verb rune) {
+	typeFormat((*types.Type)(t), s, verb, FTypeId)
+}
 func (t *fmtTypeTypeIdName) Format(s fmt.State, verb rune) {
 	typeFormat((*types.Type)(t), s, verb, FTypeIdName)
 }
@@ -718,9 +720,6 @@ func typefmt(t *types.Type, flag FmtFlag, mode fmtMode, depth int) string {
 		return "*" + tmodeString(t.Elem(), mode, depth)
 
 	case TARRAY:
-		if t.IsDDDArray() {
-			return "[...]" + tmodeString(t.Elem(), mode, depth)
-		}
 		return "[" + strconv.FormatInt(t.NumElem(), 10) + "]" + tmodeString(t.Elem(), mode, depth)
 
 	case TSLICE:
@@ -946,7 +945,7 @@ func (n *Node) stmtfmt(s fmt.State, mode fmtMode) {
 		fallthrough
 
 	case OAS2DOTTYPE, OAS2FUNC, OAS2MAPR, OAS2RECV:
-		mode.Fprintf(s, "%.v = %.v", n.List, n.Rlist)
+		mode.Fprintf(s, "%.v = %v", n.List, n.Right)
 
 	case ORETURN:
 		mode.Fprintf(s, "return %.v", n.List)
@@ -1035,26 +1034,10 @@ func (n *Node) stmtfmt(s fmt.State, mode fmtMode) {
 
 		mode.Fprintf(s, " { %v }", n.List)
 
-	case OXCASE:
+	case OCASE:
 		if n.List.Len() != 0 {
 			mode.Fprintf(s, "case %.v", n.List)
 		} else {
-			fmt.Fprint(s, "default")
-		}
-		mode.Fprintf(s, ": %v", n.Nbody)
-
-	case OCASE:
-		switch {
-		case n.Left != nil:
-			// single element
-			mode.Fprintf(s, "case %v", n.Left)
-		case n.List.Len() > 0:
-			// range
-			if n.List.Len() != 2 {
-				Fatalf("bad OCASE list length %d", n.List.Len())
-			}
-			mode.Fprintf(s, "case %v..%v", n.List.First(), n.List.Second())
-		default:
 			fmt.Fprint(s, "default")
 		}
 		mode.Fprintf(s, ": %v", n.Nbody)
@@ -1192,7 +1175,6 @@ var opprec = []int{
 	ORETURN:     -1,
 	OSELECT:     -1,
 	OSWITCH:     -1,
-	OXCASE:      -1,
 
 	OEND: 0,
 }
@@ -1319,12 +1301,8 @@ func (n *Node) exprfmt(s fmt.State, prec int, mode fmtMode) {
 
 	case OCOMPLIT:
 		if mode == FErr {
-			if n.Right != nil && n.Right.Type != nil && !n.Implicit() {
-				if n.Right.Implicit() && n.Right.Type.IsPtr() {
-					mode.Fprintf(s, "&%v literal", n.Right.Type.Elem())
-					return
-				}
-				mode.Fprintf(s, "%v literal", n.Right.Type)
+			if n.Right != nil {
+				mode.Fprintf(s, "%v literal", n.Right)
 				return
 			}
 

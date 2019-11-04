@@ -27,8 +27,8 @@ const LocPrefix = "go.loc."
 // RangePrefix is the prefix for all the symbols containing DWARF range lists.
 const RangePrefix = "go.range."
 
-// IsStmtPrefix is the prefix for all the symbols containing DWARF is_stmt info for the line number table.
-const IsStmtPrefix = "go.isstmt."
+// DebugLinesPrefix is the prefix for all the symbols containing DWARF debug_line information from the compiler.
+const DebugLinesPrefix = "go.debuglines."
 
 // ConstInfoPrefix is the prefix for all symbols containing DWARF info
 // entries that contain constants.

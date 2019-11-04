@@ -236,20 +236,31 @@ var optab = []Optab{
 
 	// branch
 	{i: 16, as: ABEQ, a6: C_SBRA},
+	{i: 16, as: ABRC, a1: C_SCON, a6: C_SBRA},
 	{i: 11, as: ABR, a6: C_LBRA},
 	{i: 16, as: ABC, a1: C_SCON, a2: C_REG, a6: C_LBRA},
 	{i: 18, as: ABR, a6: C_REG},
 	{i: 18, as: ABR, a1: C_REG, a6: C_REG},
 	{i: 15, as: ABR, a6: C_ZOREG},
 	{i: 15, as: ABC, a6: C_ZOREG},
+
+	// compare and branch
+	{i: 89, as: ACGRJ, a1: C_SCON, a2: C_REG, a3: C_REG, a6: C_SBRA},
 	{i: 89, as: ACMPBEQ, a1: C_REG, a2: C_REG, a6: C_SBRA},
+	{i: 89, as: ACLGRJ, a1: C_SCON, a2: C_REG, a3: C_REG, a6: C_SBRA},
+	{i: 89, as: ACMPUBEQ, a1: C_REG, a2: C_REG, a6: C_SBRA},
+	{i: 90, as: ACGIJ, a1: C_SCON, a2: C_REG, a3: C_ADDCON, a6: C_SBRA},
+	{i: 90, as: ACGIJ, a1: C_SCON, a2: C_REG, a3: C_SCON, a6: C_SBRA},
 	{i: 90, as: ACMPBEQ, a1: C_REG, a3: C_ADDCON, a6: C_SBRA},
 	{i: 90, as: ACMPBEQ, a1: C_REG, a3: C_SCON, a6: C_SBRA},
-	{i: 89, as: ACMPUBEQ, a1: C_REG, a2: C_REG, a6: C_SBRA},
+	{i: 90, as: ACLGIJ, a1: C_SCON, a2: C_REG, a3: C_ADDCON, a6: C_SBRA},
 	{i: 90, as: ACMPUBEQ, a1: C_REG, a3: C_ANDCON, a6: C_SBRA},
 
 	// move on condition
 	{i: 17, as: AMOVDEQ, a1: C_REG, a6: C_REG},
+
+	// load on condition
+	{i: 25, as: ALOCGR, a1: C_SCON, a2: C_REG, a6: C_REG},
 
 	// find leftmost one
 	{i: 8, as: AFLOGR, a1: C_REG, a6: C_REG},
@@ -1022,12 +1033,22 @@ func buildop(ctxt *obj.Link) {
 			opset(ACMPUBLE, r)
 			opset(ACMPUBLT, r)
 			opset(ACMPUBNE, r)
+		case ACGRJ:
+			opset(ACRJ, r)
+		case ACLGRJ:
+			opset(ACLRJ, r)
+		case ACGIJ:
+			opset(ACIJ, r)
+		case ACLGIJ:
+			opset(ACLIJ, r)
 		case AMOVDEQ:
 			opset(AMOVDGE, r)
 			opset(AMOVDGT, r)
 			opset(AMOVDLE, r)
 			opset(AMOVDLT, r)
 			opset(AMOVDNE, r)
+		case ALOCGR:
+			opset(ALOCR, r)
 		case ALTDBR:
 			opset(ALTEBR, r)
 		case ATCDB:
@@ -2618,31 +2639,35 @@ func (c *ctxtz) addcallreloc(sym *obj.LSym, add int64) *obj.Reloc {
 	return rel
 }
 
-func (c *ctxtz) branchMask(p *obj.Prog) uint32 {
+func (c *ctxtz) branchMask(p *obj.Prog) CCMask {
 	switch p.As {
+	case ABRC, ALOCR, ALOCGR,
+		ACRJ, ACGRJ, ACIJ, ACGIJ,
+		ACLRJ, ACLGRJ, ACLIJ, ACLGIJ:
+		return CCMask(p.From.Offset)
 	case ABEQ, ACMPBEQ, ACMPUBEQ, AMOVDEQ:
-		return 0x8
+		return Equal
 	case ABGE, ACMPBGE, ACMPUBGE, AMOVDGE:
-		return 0xA
+		return GreaterOrEqual
 	case ABGT, ACMPBGT, ACMPUBGT, AMOVDGT:
-		return 0x2
+		return Greater
 	case ABLE, ACMPBLE, ACMPUBLE, AMOVDLE:
-		return 0xC
+		return LessOrEqual
 	case ABLT, ACMPBLT, ACMPUBLT, AMOVDLT:
-		return 0x4
+		return Less
 	case ABNE, ACMPBNE, ACMPUBNE, AMOVDNE:
-		return 0x7
+		return NotEqual
 	case ABLEU: // LE or unordered
-		return 0xD
+		return NotGreater
 	case ABLTU: // LT or unordered
-		return 0x5
+		return LessOrUnordered
 	case ABVC:
-		return 0x0 // needs extra instruction
+		return Never // needs extra instruction
 	case ABVS:
-		return 0x1 // unordered
+		return Unordered
 	}
 	c.ctxt.Diag("unknown conditional branch %v", p.As)
-	return 0xF
+	return Always
 }
 
 func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
@@ -3048,7 +3073,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		if p.As == ABCL || p.As == ABL {
 			zRR(op_BASR, uint32(REG_LR), uint32(r), asm)
 		} else {
-			zRR(op_BCR, 0xF, uint32(r), asm)
+			zRR(op_BCR, uint32(Always), uint32(r), asm)
 		}
 
 	case 16: // conditional branch
@@ -3056,7 +3081,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		if p.Pcond != nil {
 			v = int32((p.Pcond.Pc - p.Pc) >> 1)
 		}
-		mask := c.branchMask(p)
+		mask := uint32(c.branchMask(p))
 		if p.To.Sym == nil && int32(int16(v)) == v {
 			zRI(op_BRC, mask, uint32(v), asm)
 		} else {
@@ -3067,14 +3092,14 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		}
 
 	case 17: // move on condition
-		m3 := c.branchMask(p)
+		m3 := uint32(c.branchMask(p))
 		zRRF(op_LOCGR, m3, 0, uint32(p.To.Reg), uint32(p.From.Reg), asm)
 
 	case 18: // br/bl reg
 		if p.As == ABL {
 			zRR(op_BASR, uint32(REG_LR), uint32(p.To.Reg), asm)
 		} else {
-			zRR(op_BCR, 0xF, uint32(p.To.Reg), asm)
+			zRR(op_BCR, uint32(Always), uint32(p.To.Reg), asm)
 		}
 
 	case 19: // mov $sym+n(SB) reg
@@ -3206,6 +3231,17 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		case AXORW:
 			zRIL(_a, op_XILF, uint32(p.To.Reg), uint32(v), asm)
 		}
+
+	case 25: // load on condition (register)
+		m3 := uint32(c.branchMask(p))
+		var opcode uint32
+		switch p.As {
+		case ALOCR:
+			opcode = op_LOCR
+		case ALOCGR:
+			opcode = op_LOCGR
+		}
+		zRRF(opcode, m3, 0, uint32(p.To.Reg), uint32(p.Reg), asm)
 
 	case 26: // MOVD $offset(base)(index), reg
 		v := c.regoff(&p.From)
@@ -3412,7 +3448,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		zRRE(op_MLGR, uint32(p.To.Reg), uint32(p.From.Reg), asm)
 
 	case 66:
-		zRR(op_BCR, 0, 0, asm)
+		zRR(op_BCR, uint32(Never), 0, asm)
 
 	case 67: // fmov $0 freg
 		var opcode uint32
@@ -3598,7 +3634,7 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		}
 
 	case 80: // sync
-		zRR(op_BCR, 0xE, 0, asm)
+		zRR(op_BCR, uint32(NotEqual), 0, asm)
 
 	case 81: // float to fixed and fixed to float moves (no conversion)
 		switch p.As {
@@ -3788,21 +3824,44 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		if p.Pcond != nil {
 			v = int32((p.Pcond.Pc - p.Pc) >> 1)
 		}
-		var opcode, opcode2 uint32
-		switch p.As {
-		case ACMPBEQ, ACMPBGE, ACMPBGT, ACMPBLE, ACMPBLT, ACMPBNE:
-			opcode = op_CGRJ
-			opcode2 = op_CGR
-		case ACMPUBEQ, ACMPUBGE, ACMPUBGT, ACMPUBLE, ACMPUBLT, ACMPUBNE:
-			opcode = op_CLGRJ
-			opcode2 = op_CLGR
+
+		// Some instructions take a mask as the first argument.
+		r1, r2 := p.From.Reg, p.Reg
+		if p.From.Type == obj.TYPE_CONST {
+			r1, r2 = p.Reg, p.RestArgs[0].Reg
 		}
-		mask := c.branchMask(p)
+		m3 := uint32(c.branchMask(p))
+
+		var opcode uint32
+		switch p.As {
+		case ACRJ:
+			// COMPARE AND BRANCH RELATIVE (32)
+			opcode = op_CRJ
+		case ACGRJ, ACMPBEQ, ACMPBGE, ACMPBGT, ACMPBLE, ACMPBLT, ACMPBNE:
+			// COMPARE AND BRANCH RELATIVE (64)
+			opcode = op_CGRJ
+		case ACLRJ:
+			// COMPARE LOGICAL AND BRANCH RELATIVE (32)
+			opcode = op_CLRJ
+		case ACLGRJ, ACMPUBEQ, ACMPUBGE, ACMPUBGT, ACMPUBLE, ACMPUBLT, ACMPUBNE:
+			// COMPARE LOGICAL AND BRANCH RELATIVE (64)
+			opcode = op_CLGRJ
+		}
+
 		if int32(int16(v)) != v {
-			zRRE(opcode2, uint32(p.From.Reg), uint32(p.Reg), asm)
-			zRIL(_c, op_BRCL, mask, uint32(v-sizeRRE/2), asm)
+			// The branch is too far for one instruction so crack
+			// `CMPBEQ x, y, target` into:
+			//
+			//     CMPBNE x, y, 2(PC)
+			//     BR     target
+			//
+			// Note that the instruction sequence MUST NOT clobber
+			// the condition code.
+			m3 ^= 0xe // invert 3-bit mask
+			zRIE(_b, opcode, uint32(r1), uint32(r2), uint32(sizeRIE+sizeRIL)/2, 0, 0, m3, 0, asm)
+			zRIL(_c, op_BRCL, uint32(Always), uint32(v-sizeRIE/2), asm)
 		} else {
-			zRIE(_b, opcode, uint32(p.From.Reg), uint32(p.Reg), uint32(v), 0, 0, mask, 0, asm)
+			zRIE(_b, opcode, uint32(r1), uint32(r2), uint32(v), 0, 0, m3, 0, asm)
 		}
 
 	case 90: // compare and branch reg $constant
@@ -3810,21 +3869,39 @@ func (c *ctxtz) asmout(p *obj.Prog, asm *[]byte) {
 		if p.Pcond != nil {
 			v = int32((p.Pcond.Pc - p.Pc) >> 1)
 		}
-		var opcode, opcode2 uint32
-		switch p.As {
-		case ACMPBEQ, ACMPBGE, ACMPBGT, ACMPBLE, ACMPBLT, ACMPBNE:
-			opcode = op_CGIJ
-			opcode2 = op_CGFI
-		case ACMPUBEQ, ACMPUBGE, ACMPUBGT, ACMPUBLE, ACMPUBLT, ACMPUBNE:
-			opcode = op_CLGIJ
-			opcode2 = op_CLGFI
+
+		// Some instructions take a mask as the first argument.
+		r1, i2 := p.From.Reg, p.RestArgs[0].Offset
+		if p.From.Type == obj.TYPE_CONST {
+			r1 = p.Reg
 		}
-		mask := c.branchMask(p)
+		m3 := uint32(c.branchMask(p))
+
+		var opcode uint32
+		switch p.As {
+		case ACIJ:
+			opcode = op_CIJ
+		case ACGIJ, ACMPBEQ, ACMPBGE, ACMPBGT, ACMPBLE, ACMPBLT, ACMPBNE:
+			opcode = op_CGIJ
+		case ACLIJ:
+			opcode = op_CLIJ
+		case ACLGIJ, ACMPUBEQ, ACMPUBGE, ACMPUBGT, ACMPUBLE, ACMPUBLT, ACMPUBNE:
+			opcode = op_CLGIJ
+		}
 		if int32(int16(v)) != v {
-			zRIL(_a, opcode2, uint32(p.From.Reg), uint32(c.regoff(p.GetFrom3())), asm)
-			zRIL(_c, op_BRCL, mask, uint32(v-sizeRIL/2), asm)
+			// The branch is too far for one instruction so crack
+			// `CMPBEQ x, $0, target` into:
+			//
+			//     CMPBNE x, $0, 2(PC)
+			//     BR     target
+			//
+			// Note that the instruction sequence MUST NOT clobber
+			// the condition code.
+			m3 ^= 0xe // invert 3-bit mask
+			zRIE(_c, opcode, uint32(r1), m3, uint32(sizeRIE+sizeRIL)/2, 0, 0, 0, uint32(i2), asm)
+			zRIL(_c, op_BRCL, uint32(Always), uint32(v-sizeRIE/2), asm)
 		} else {
-			zRIE(_c, opcode, uint32(p.From.Reg), mask, uint32(v), 0, 0, 0, uint32(c.regoff(p.GetFrom3())), asm)
+			zRIE(_c, opcode, uint32(r1), m3, uint32(v), 0, 0, 0, uint32(i2), asm)
 		}
 
 	case 91: // test under mask (immediate)

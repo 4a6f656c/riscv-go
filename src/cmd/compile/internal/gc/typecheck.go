@@ -62,7 +62,6 @@ const (
 	ctxCallee              // call-only expressions are ok
 	ctxMultiOK             // multivalue function returns are ok
 	ctxAssign              // assigning to expression
-	ctxCompLit             // type in composite literal
 )
 
 // type checks the whole tree of an expression.
@@ -413,15 +412,12 @@ func typecheck1(n *Node, top int) (res *Node) {
 		if n.Left == nil {
 			t = types.NewSlice(r.Type)
 		} else if n.Left.Op == ODDD {
-			if top&ctxCompLit == 0 {
-				if !n.Diag() {
-					n.SetDiag(true)
-					yyerror("use of [...] array outside of array literal")
-				}
-				n.Type = nil
-				return n
+			if !n.Diag() {
+				n.SetDiag(true)
+				yyerror("use of [...] array outside of array literal")
 			}
-			t = types.NewDDDArray(r.Type)
+			n.Type = nil
+			return n
 		} else {
 			n.Left = indexlit(typecheck(n.Left, ctxExpr))
 			l := n.Left
@@ -457,9 +453,7 @@ func typecheck1(n *Node, top int) (res *Node) {
 		setTypeNode(n, t)
 		n.Left = nil
 		n.Right = nil
-		if !t.IsDDDArray() {
-			checkwidth(t)
-		}
+		checkwidth(t)
 
 	case OTMAP:
 		ok |= ctxType
@@ -517,7 +511,7 @@ func typecheck1(n *Node, top int) (res *Node) {
 
 	// type or expr
 	case ODEREF:
-		n.Left = typecheck(n.Left, ctxExpr|ctxType|top&ctxCompLit)
+		n.Left = typecheck(n.Left, ctxExpr|ctxType)
 		l := n.Left
 		t := l.Type
 		if t == nil {
@@ -527,13 +521,9 @@ func typecheck1(n *Node, top int) (res *Node) {
 		if l.Op == OTYPE {
 			ok |= ctxType
 			setTypeNode(n, types.NewPtr(l.Type))
-			// Ensure l.Type gets dowidth'd for the backend. Issue 20174.
-			// Don't checkwidth [...] arrays, though, since they
-			// will be replaced by concrete-sized arrays. Issue 20333.
-			if !l.Type.IsDDDArray() {
-				checkwidth(l.Type)
-			}
 			n.Left = nil
+			// Ensure l.Type gets dowidth'd for the backend. Issue 20174.
+			checkwidth(l.Type)
 			break
 		}
 
@@ -830,36 +820,38 @@ func typecheck1(n *Node, top int) (res *Node) {
 			n.Type = nil
 			return n
 		}
-		checklvalue(n.Left, "take the address of")
-		r := outervalue(n.Left)
-		var l *Node
-		for l = n.Left; l != r; l = l.Left {
-			l.SetAddrtaken(true)
-			if l.IsClosureVar() && !capturevarscomplete {
-				// Mark the original variable as Addrtaken so that capturevars
-				// knows not to pass it by value.
-				// But if the capturevars phase is complete, don't touch it,
-				// in case l.Name's containing function has not yet been compiled.
-				l.Name.Defn.SetAddrtaken(true)
+
+		switch n.Left.Op {
+		case OARRAYLIT, OMAPLIT, OSLICELIT, OSTRUCTLIT:
+			n.Op = OPTRLIT
+
+		default:
+			checklvalue(n.Left, "take the address of")
+			r := outervalue(n.Left)
+			if r.Orig != r && r.Op == ONAME {
+				Fatalf("found non-orig name node %v", r) // TODO(mdempsky): What does this mean?
+			}
+			for l := n.Left; ; l = l.Left {
+				l.SetAddrtaken(true)
+				if l.IsClosureVar() && !capturevarscomplete {
+					// Mark the original variable as Addrtaken so that capturevars
+					// knows not to pass it by value.
+					// But if the capturevars phase is complete, don't touch it,
+					// in case l.Name's containing function has not yet been compiled.
+					l.Name.Defn.SetAddrtaken(true)
+				}
+				if l == r {
+					break
+				}
+			}
+			n.Left = defaultlit(n.Left, nil)
+			if n.Left.Type == nil {
+				n.Type = nil
+				return n
 			}
 		}
 
-		if l.Orig != l && l.Op == ONAME {
-			Fatalf("found non-orig name node %v", l)
-		}
-		l.SetAddrtaken(true)
-		if l.IsClosureVar() && !capturevarscomplete {
-			// See comments above about closure variables.
-			l.Name.Defn.SetAddrtaken(true)
-		}
-		n.Left = defaultlit(n.Left, nil)
-		l = n.Left
-		t := l.Type
-		if t == nil {
-			n.Type = nil
-			return n
-		}
-		n.Type = types.NewPtr(t)
+		n.Type = types.NewPtr(n.Left.Type)
 
 	case OCOMPLIT:
 		ok |= ctxExpr
@@ -1043,8 +1035,8 @@ func typecheck1(n *Node, top int) (res *Node) {
 					yyerror("invalid %s index %v (index must be non-negative)", why, n.Right)
 				} else if t.IsArray() && x >= t.NumElem() {
 					yyerror("invalid array index %v (out of bounds for %d-element array)", n.Right, t.NumElem())
-				} else if Isconst(n.Left, CTSTR) && x >= int64(len(n.Left.Val().U.(string))) {
-					yyerror("invalid string index %v (out of bounds for %d-byte string)", n.Right, len(n.Left.Val().U.(string)))
+				} else if Isconst(n.Left, CTSTR) && x >= int64(len(strlit(n.Left))) {
+					yyerror("invalid string index %v (out of bounds for %d-byte string)", n.Right, len(strlit(n.Left)))
 				} else if n.Right.Val().U.(*Mpint).Cmp(maxintval[TINT]) > 0 {
 					yyerror("invalid %s index %v (index too large)", why, n.Right)
 				}
@@ -1255,7 +1247,7 @@ func typecheck1(n *Node, top int) (res *Node) {
 		n.Left = defaultlit(n.Left, nil)
 		l = n.Left
 		if l.Op == OTYPE {
-			if n.IsDDD() || l.Type.IsDDDArray() {
+			if n.IsDDD() {
 				if !l.Type.Broke() {
 					yyerror("invalid use of ... in type conversion to %v", l.Type)
 				}
@@ -2014,7 +2006,7 @@ func typecheck1(n *Node, top int) (res *Node) {
 		n.Type = nil
 		return n
 
-	case OXCASE:
+	case OCASE:
 		ok |= ctxStmt
 		typecheckslice(n.List.Slice(), ctxExpr)
 		typecheckslice(n.Nbody.Slice(), ctxStmt)
@@ -2148,8 +2140,8 @@ func checksliceindex(l *Node, r *Node, tp *types.Type) bool {
 		} else if tp != nil && tp.NumElem() >= 0 && r.Int64() > tp.NumElem() {
 			yyerror("invalid slice index %v (out of bounds for %d-element array)", r, tp.NumElem())
 			return false
-		} else if Isconst(l, CTSTR) && r.Int64() > int64(len(l.Val().U.(string))) {
-			yyerror("invalid slice index %v (out of bounds for %d-byte string)", r, len(l.Val().U.(string)))
+		} else if Isconst(l, CTSTR) && r.Int64() > int64(len(strlit(l))) {
+			yyerror("invalid slice index %v (out of bounds for %d-byte string)", r, len(strlit(l)))
 			return false
 		} else if r.Val().U.(*Mpint).Cmp(maxintval[TINT]) > 0 {
 			yyerror("invalid slice index %v (index too large)", r)
@@ -2204,7 +2196,7 @@ func checkdefergo(n *Node) {
 		if n.Left.Orig != nil && n.Left.Orig.Op == OCONV {
 			break
 		}
-		yyerror("%s discards result of %v", what, n.Left)
+		yyerrorl(n.Pos, "%s discards result of %v", what, n.Left)
 		return
 	}
 
@@ -2218,7 +2210,7 @@ func checkdefergo(n *Node) {
 		// The syntax made sure it was a call, so this must be
 		// a conversion.
 		n.SetDiag(true)
-		yyerror("%s requires function call, not conversion", what)
+		yyerrorl(n.Pos, "%s requires function call, not conversion", what)
 	}
 }
 
@@ -2723,13 +2715,8 @@ func fielddup(name string, hash map[string]bool) {
 	hash[name] = true
 }
 
-// iscomptype reports whether type t is a composite literal type
-// or a pointer to one.
+// iscomptype reports whether type t is a composite literal type.
 func iscomptype(t *types.Type) bool {
-	if t.IsPtr() {
-		t = t.Elem()
-	}
-
 	switch t.Etype {
 	case TARRAY, TSLICE, TSTRUCT, TMAP:
 		return true
@@ -2738,21 +2725,27 @@ func iscomptype(t *types.Type) bool {
 	}
 }
 
-func pushtype(n *Node, t *types.Type) {
-	if n == nil || n.Op != OCOMPLIT || !iscomptype(t) {
-		return
+// pushtype adds elided type information for composite literals if
+// appropriate, and returns the resulting expression.
+func pushtype(n *Node, t *types.Type) *Node {
+	if n == nil || n.Op != OCOMPLIT || n.Right != nil {
+		return n
 	}
 
-	if n.Right == nil {
+	switch {
+	case iscomptype(t):
+		// For T, return T{...}.
 		n.Right = typenod(t)
-		n.SetImplicit(true)       // don't print
-		n.Right.SetImplicit(true) // * is okay
-	} else if Debug['s'] != 0 {
-		n.Right = typecheck(n.Right, ctxType)
-		if n.Right.Type != nil && types.Identical(n.Right.Type, t) {
-			fmt.Printf("%v: redundant type: %v\n", n.Line(), t)
-		}
+
+	case t.IsPtr() && iscomptype(t.Elem()):
+		// For *T, return &T{...}.
+		n.Right = typenod(t.Elem())
+
+		n = nodl(n.Pos, OADDR, n, nil)
+		n.SetImplicit(true)
 	}
+
+	return n
 }
 
 // The result of typecheckcomplit MUST be assigned back to n, e.g.
@@ -2774,112 +2767,49 @@ func typecheckcomplit(n *Node) (res *Node) {
 	}
 
 	// Save original node (including n.Right)
-	norig := n.copy()
+	n.Orig = n.copy()
 
 	setlineno(n.Right)
-	n.Right = typecheck(n.Right, ctxType|ctxCompLit)
-	l := n.Right // sic
-	t := l.Type
+
+	// Need to handle [...]T arrays specially.
+	if n.Right.Op == OTARRAY && n.Right.Left != nil && n.Right.Left.Op == ODDD {
+		n.Right.Right = typecheck(n.Right.Right, ctxType)
+		if n.Right.Right.Type == nil {
+			n.Type = nil
+			return n
+		}
+		elemType := n.Right.Right.Type
+
+		length := typecheckarraylit(elemType, -1, n.List.Slice())
+
+		n.Op = OARRAYLIT
+		n.Type = types.NewArray(elemType, length)
+		n.Right = nil
+		return n
+	}
+
+	n.Right = typecheck(n.Right, ctxType)
+	t := n.Right.Type
 	if t == nil {
 		n.Type = nil
 		return n
 	}
-	nerr := nerrors
 	n.Type = t
-
-	if t.IsPtr() {
-		// For better or worse, we don't allow pointers as the composite literal type,
-		// except when using the &T syntax, which sets implicit on the ODEREF.
-		if !n.Right.Implicit() {
-			yyerror("invalid pointer type %v for composite literal (use &%v instead)", t, t.Elem())
-			n.Type = nil
-			return n
-		}
-
-		// Also, the underlying type must be a struct, map, slice, or array.
-		if !iscomptype(t) {
-			yyerror("invalid pointer type %v for composite literal", t)
-			n.Type = nil
-			return n
-		}
-
-		t = t.Elem()
-	}
 
 	switch t.Etype {
 	default:
-		yyerror("invalid type for composite literal: %v", t)
+		yyerror("invalid composite literal type %v", t)
 		n.Type = nil
 
-	case TARRAY, TSLICE:
-		// If there are key/value pairs, create a map to keep seen
-		// keys so we can check for duplicate indices.
-		var indices map[int64]bool
-		for _, n1 := range n.List.Slice() {
-			if n1.Op == OKEY {
-				indices = make(map[int64]bool)
-				break
-			}
-		}
+	case TARRAY:
+		typecheckarraylit(t.Elem(), t.NumElem(), n.List.Slice())
+		n.Op = OARRAYLIT
+		n.Right = nil
 
-		var length, i int64
-		checkBounds := t.IsArray() && !t.IsDDDArray()
-		nl := n.List.Slice()
-		for i2, l := range nl {
-			setlineno(l)
-			vp := &nl[i2]
-			if l.Op == OKEY {
-				l.Left = typecheck(l.Left, ctxExpr)
-				evconst(l.Left)
-				i = indexconst(l.Left)
-				if i < 0 {
-					if !l.Left.Diag() {
-						if i == -2 {
-							yyerror("index too large")
-						} else {
-							yyerror("index must be non-negative integer constant")
-						}
-						l.Left.SetDiag(true)
-					}
-					i = -(1 << 30) // stay negative for a while
-				}
-				vp = &l.Right
-			}
-
-			if i >= 0 && indices != nil {
-				if indices[i] {
-					yyerror("duplicate index in array literal: %d", i)
-				} else {
-					indices[i] = true
-				}
-			}
-
-			r := *vp
-			pushtype(r, t.Elem())
-			r = typecheck(r, ctxExpr)
-			*vp = assignconv(r, t.Elem(), "array or slice literal")
-
-			i++
-			if i > length {
-				length = i
-				if checkBounds && length > t.NumElem() {
-					setlineno(l)
-					yyerror("array index %d out of bounds [0:%d]", length-1, t.NumElem())
-					checkBounds = false
-				}
-			}
-		}
-
-		if t.IsDDDArray() {
-			t.SetNumElem(length)
-		}
-		if t.IsSlice() {
-			n.Op = OSLICELIT
-			n.Right = nodintconst(length)
-		} else {
-			n.Op = OARRAYLIT
-			n.Right = nil
-		}
+	case TSLICE:
+		length := typecheckarraylit(t.Elem(), -1, n.List.Slice())
+		n.Op = OSLICELIT
+		n.Right = nodintconst(length)
 
 	case TMAP:
 		var cs constSet
@@ -2892,13 +2822,13 @@ func typecheckcomplit(n *Node) (res *Node) {
 			}
 
 			r := l.Left
-			pushtype(r, t.Key())
+			r = pushtype(r, t.Key())
 			r = typecheck(r, ctxExpr)
 			l.Left = assignconv(r, t.Key(), "map key")
 			cs.add(lineno, l.Left, "key", "map literal")
 
 			r = l.Right
-			pushtype(r, t.Elem())
+			r = pushtype(r, t.Elem())
 			r = typecheck(r, ctxExpr)
 			l.Right = assignconv(r, t.Elem(), "map value")
 		}
@@ -3025,21 +2955,68 @@ func typecheckcomplit(n *Node) (res *Node) {
 		n.Right = nil
 	}
 
-	if nerr != nerrors {
-		return n
-	}
-
-	n.Orig = norig
-	if n.Type.IsPtr() {
-		n = nod(OPTRLIT, n, nil)
-		n.SetTypecheck(1)
-		n.Type = n.Left.Type
-		n.Left.Type = t
-		n.Left.SetTypecheck(1)
-	}
-
-	n.Orig = norig
 	return n
+}
+
+func typecheckarraylit(elemType *types.Type, bound int64, elts []*Node) int64 {
+	// If there are key/value pairs, create a map to keep seen
+	// keys so we can check for duplicate indices.
+	var indices map[int64]bool
+	for _, elt := range elts {
+		if elt.Op == OKEY {
+			indices = make(map[int64]bool)
+			break
+		}
+	}
+
+	var key, length int64
+	for i, elt := range elts {
+		setlineno(elt)
+		vp := &elts[i]
+		if elt.Op == OKEY {
+			elt.Left = typecheck(elt.Left, ctxExpr)
+			key = indexconst(elt.Left)
+			if key < 0 {
+				if !elt.Left.Diag() {
+					if key == -2 {
+						yyerror("index too large")
+					} else {
+						yyerror("index must be non-negative integer constant")
+					}
+					elt.Left.SetDiag(true)
+				}
+				key = -(1 << 30) // stay negative for a while
+			}
+			vp = &elt.Right
+		}
+
+		r := *vp
+		r = pushtype(r, elemType)
+		r = typecheck(r, ctxExpr)
+		*vp = assignconv(r, elemType, "array or slice literal")
+
+		if key >= 0 {
+			if indices != nil {
+				if indices[key] {
+					yyerror("duplicate index in array literal: %d", key)
+				} else {
+					indices[key] = true
+				}
+			}
+
+			if bound >= 0 && key >= bound {
+				yyerror("array index %d out of bounds [0:%d]", key, bound)
+				bound = -1
+			}
+		}
+
+		key++
+		if key > length {
+			length = key
+		}
+	}
+
+	return length
 }
 
 // visible reports whether sym is exported or locally defined.
@@ -3298,6 +3275,8 @@ func typecheckas2(n *Node) {
 				goto mismatch
 			}
 			n.Op = OAS2FUNC
+			n.Right = r
+			n.Rlist.Set(nil)
 			for i, l := range n.List.Slice() {
 				f := r.Type.Field(i)
 				if f.Type != nil && l.Type != nil {
@@ -3321,15 +3300,14 @@ func typecheckas2(n *Node) {
 			switch r.Op {
 			case OINDEXMAP:
 				n.Op = OAS2MAPR
-
 			case ORECV:
 				n.Op = OAS2RECV
-
 			case ODOTTYPE:
 				n.Op = OAS2DOTTYPE
 				r.Op = ODOTTYPE2
 			}
-
+			n.Right = r
+			n.Rlist.Set(nil)
 			if l.Type != nil {
 				checkassignto(r.Type, l)
 			}
@@ -3409,7 +3387,7 @@ func stringtoruneslit(n *Node) *Node {
 	}
 
 	var l []*Node
-	s := n.Left.Val().U.(string)
+	s := strlit(n.Left)
 	i := 0
 	for _, r := range s {
 		l = append(l, nod(OKEY, nodintconst(int64(i)), nodintconst(int64(r))))

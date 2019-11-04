@@ -662,15 +662,6 @@ func (p *noder) expr(expr syntax.Expr) *Node {
 		}
 		x := p.expr(expr.X)
 		if expr.Y == nil {
-			if expr.Op == syntax.And {
-				x = unparen(x) // TODO(mdempsky): Needed?
-				if x.Op == OCOMPLIT {
-					// Special case for &T{...}: turn into (*T){...}.
-					x.Right = p.nod(expr, ODEREF, x.Right, nil)
-					x.Right.SetImplicit(true)
-					return x
-				}
-			}
 			return p.nod(expr, p.unOp(expr.Op), x, nil)
 		}
 		return p.nod(expr, p.binOp(expr.Op), x, p.expr(expr.Y))
@@ -762,7 +753,7 @@ func (p *noder) sum(x syntax.Expr) *Node {
 	n := p.expr(x)
 	if Isconst(n, CTSTR) && n.Sym == nil {
 		nstr = n
-		chunks = append(chunks, nstr.Val().U.(string))
+		chunks = append(chunks, strlit(nstr))
 	}
 
 	for i := len(adds) - 1; i >= 0; i-- {
@@ -772,12 +763,12 @@ func (p *noder) sum(x syntax.Expr) *Node {
 		if Isconst(r, CTSTR) && r.Sym == nil {
 			if nstr != nil {
 				// Collapse r into nstr instead of adding to n.
-				chunks = append(chunks, r.Val().U.(string))
+				chunks = append(chunks, strlit(r))
 				continue
 			}
 
 			nstr = r
-			chunks = append(chunks, nstr.Val().U.(string))
+			chunks = append(chunks, strlit(nstr))
 		} else {
 			if len(chunks) > 1 {
 				nstr.SetVal(Val{U: strings.Join(chunks, "")})
@@ -1188,7 +1179,7 @@ func (p *noder) caseClauses(clauses []*syntax.CaseClause, tswitch *Node, rbrace 
 		}
 		p.openScope(clause.Pos())
 
-		n := p.nod(clause, OXCASE, nil, nil)
+		n := p.nod(clause, OCASE, nil, nil)
 		if clause.Cases != nil {
 			n.List.Set(p.exprList(clause.Cases))
 		}
@@ -1244,7 +1235,7 @@ func (p *noder) commClauses(clauses []*syntax.CommClause, rbrace syntax.Pos) []*
 		}
 		p.openScope(clause.Pos())
 
-		n := p.nod(clause, OXCASE, nil, nil)
+		n := p.nod(clause, OCASE, nil, nil)
 		if clause.Comm != nil {
 			n.List.Set1(p.stmt(clause.Comm))
 		}

@@ -110,7 +110,7 @@ func efaceEscape1() {
 	{
 		i := 0         // ERROR "moved to heap: i"
 		v := M1{&i, 0}
-		var x M = v // ERROR "efaceEscape1 v does not escape"
+		var x M = v // ERROR "v does not escape"
 		v1 := x.(M1)
 		sink = v1 // ERROR "v1 escapes to heap"
 	}
@@ -220,8 +220,8 @@ type T2 struct {
 func dotTypeEscape() *T2 { // #11931
 	var x interface{}
 	x = &T1{p: new(int)} // ERROR "new\(int\) escapes to heap" "&T1 literal does not escape"
-	return &T2{
-		T1: *(x.(*T1)), // ERROR "&T2 literal escapes to heap"
+	return &T2{          // ERROR "&T2 literal escapes to heap"
+		T1: *(x.(*T1)),
 	}
 }
 

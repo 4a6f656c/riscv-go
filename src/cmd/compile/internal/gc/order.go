@@ -567,7 +567,7 @@ func (o *Order) stmt(n *Node) {
 	case OAS2MAPR:
 		t := o.markTemp()
 		o.exprList(n.List)
-		r := n.Rlist.First()
+		r := n.Right
 		r.Left = o.expr(r.Left, nil)
 		r.Right = o.expr(r.Right, nil)
 
@@ -582,8 +582,8 @@ func (o *Order) stmt(n *Node) {
 	case OAS2FUNC:
 		t := o.markTemp()
 		o.exprList(n.List)
-		o.init(n.Rlist.First())
-		o.call(n.Rlist.First())
+		o.init(n.Right)
+		o.call(n.Right)
 		o.as2(n)
 		o.cleanTemp(t)
 
@@ -593,7 +593,7 @@ func (o *Order) stmt(n *Node) {
 	case OAS2DOTTYPE:
 		t := o.markTemp()
 		o.exprList(n.List)
-		n.Rlist.First().Left = o.expr(n.Rlist.First().Left, nil) // i in i.(T)
+		n.Right.Left = o.expr(n.Right.Left, nil) // i in i.(T)
 		o.okAs2(n)
 		o.cleanTemp(t)
 
@@ -602,8 +602,8 @@ func (o *Order) stmt(n *Node) {
 	case OAS2RECV:
 		t := o.markTemp()
 		o.exprList(n.List)
-		n.Rlist.First().Left = o.expr(n.Rlist.First().Left, nil) // arg to recv
-		ch := n.Rlist.First().Left.Type
+		n.Right.Left = o.expr(n.Right.Left, nil) // arg to recv
+		ch := n.Right.Left.Type
 		tmp1 := o.newTemp(ch.Elem(), types.Haspointers(ch.Elem()))
 		tmp2 := o.newTemp(types.Types[TBOOL], false)
 		o.out = append(o.out, n)
@@ -779,7 +779,7 @@ func (o *Order) stmt(n *Node) {
 		t := o.markTemp()
 
 		for _, n2 := range n.List.Slice() {
-			if n2.Op != OXCASE {
+			if n2.Op != OCASE {
 				Fatalf("order select case %v", n2.Op)
 			}
 			r := n2.Left
@@ -938,7 +938,7 @@ func (o *Order) stmt(n *Node) {
 		t := o.markTemp()
 		n.Left = o.expr(n.Left, nil)
 		for _, ncas := range n.List.Slice() {
-			if ncas.Op != OXCASE {
+			if ncas.Op != OCASE {
 				Fatalf("order switch case %v", ncas.Op)
 			}
 			o.exprListInPlace(ncas.List)
@@ -1017,7 +1017,7 @@ func (o *Order) expr(n, lhs *Node) *Node {
 		haslit := false
 		for _, n1 := range n.List.Slice() {
 			hasbyte = hasbyte || n1.Op == OBYTES2STR
-			haslit = haslit || n1.Op == OLITERAL && len(n1.Val().U.(string)) != 0
+			haslit = haslit || n1.Op == OLITERAL && len(strlit(n1)) != 0
 		}
 
 		if haslit && hasbyte {
@@ -1343,7 +1343,7 @@ func (o *Order) as2(n *Node) {
 func (o *Order) okAs2(n *Node) {
 	var tmp1, tmp2 *Node
 	if !n.List.First().isBlank() {
-		typ := n.Rlist.First().Type
+		typ := n.Right.Type
 		tmp1 = o.newTemp(typ, types.Haspointers(typ))
 	}
 

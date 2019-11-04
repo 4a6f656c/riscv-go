@@ -126,8 +126,9 @@ func deadcode(ctxt *Link) {
 	textp := make([]*sym.Symbol, 0, len(ctxt.Textp))
 	for _, s := range ctxt.Textp {
 		if s.Attr.Reachable() {
-			if s.Lib != nil {
-				s.Lib.Textp = append(s.Lib.Textp, s)
+			if s.Unit != nil {
+				s.Unit.Lib.Textp = append(s.Unit.Lib.Textp, s)
+				s.Unit.Textp = append(s.Unit.Textp, s)
 			}
 			textp = append(textp, s)
 		}
@@ -269,12 +270,6 @@ func (d *deadcodepass) flood() {
 			if d.ctxt.Debugvlog > 1 {
 				d.ctxt.Logf("marktext %s\n", s.Name)
 			}
-			if s.FuncInfo != nil {
-				for _, a := range s.FuncInfo.Autom {
-					d.mark(a.Gotype, s)
-				}
-			}
-
 		}
 
 		if strings.HasPrefix(s.Name, "type.") && s.Name[5] != '.' {

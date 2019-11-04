@@ -553,3 +553,35 @@ func BenchmarkParseLarge(b *testing.B) {
 		}
 	}
 }
+
+var sinkv, sinkl string
+
+func BenchmarkVariableString(b *testing.B) {
+	v := &VariableNode{
+		Ident: []string{"$", "A", "BB", "CCC", "THIS_IS_THE_VARIABLE_BEING_PROCESSED"},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		sinkv = v.String()
+	}
+	if sinkv == "" {
+		b.Fatal("Benchmark was not run")
+	}
+}
+
+func BenchmarkListString(b *testing.B) {
+	text := `{{ (printf .Field1.Field2.Field3).Value }}`
+	tree, err := New("bench").Parse(text, "", "", make(map[string]*Tree), builtins)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		sinkl = tree.Root.String()
+	}
+	if sinkl == "" {
+		b.Fatal("Benchmark was not run")
+	}
+}

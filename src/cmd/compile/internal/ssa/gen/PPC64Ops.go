@@ -140,6 +140,8 @@ func init() {
 		gp1cr       = regInfo{inputs: []regMask{gp | sp | sb}}
 		gp2cr       = regInfo{inputs: []regMask{gp | sp | sb, gp | sp | sb}}
 		crgp        = regInfo{inputs: nil, outputs: []regMask{gp}}
+		crgp11      = regInfo{inputs: []regMask{gp}, outputs: []regMask{gp}}
+		crgp21      = regInfo{inputs: []regMask{gp, gp}, outputs: []regMask{gp}}
 		gpload      = regInfo{inputs: []regMask{gp | sp | sb}, outputs: []regMask{gp}}
 		gploadidx   = regInfo{inputs: []regMask{gp | sp | sb, gp}, outputs: []regMask{gp}}
 		gpstore     = regInfo{inputs: []regMask{gp | sp | sb, gp | sp | sb}}
@@ -250,27 +252,27 @@ func init() {
 		{name: "MFVSRD", argLength: 1, reg: fpgp, asm: "MFVSRD", typ: "Int64"},   // move 64 bits of F register into G register
 		{name: "MTVSRD", argLength: 1, reg: gpfp, asm: "MTVSRD", typ: "Float64"}, // move 64 bits of G register into F register
 
-		{name: "AND", argLength: 2, reg: gp21, asm: "AND", commutative: true},                   // arg0&arg1
-		{name: "ANDN", argLength: 2, reg: gp21, asm: "ANDN"},                                    // arg0&^arg1
-		{name: "ANDCC", argLength: 2, reg: gp21, asm: "ANDCC", commutative: true, typ: "Flags"}, // arg0&arg1 sets CC
-		{name: "OR", argLength: 2, reg: gp21, asm: "OR", commutative: true},                     // arg0|arg1
-		{name: "ORN", argLength: 2, reg: gp21, asm: "ORN"},                                      // arg0|^arg1
-		{name: "ORCC", argLength: 2, reg: gp21, asm: "ORCC", commutative: true, typ: "Flags"},   // arg0|arg1 sets CC
-		{name: "NOR", argLength: 2, reg: gp21, asm: "NOR", commutative: true},                   // ^(arg0|arg1)
-		{name: "XOR", argLength: 2, reg: gp21, asm: "XOR", typ: "Int64", commutative: true},     // arg0^arg1
-		{name: "XORCC", argLength: 2, reg: gp21, asm: "XORCC", commutative: true, typ: "Flags"}, // arg0^arg1 sets CC
-		{name: "EQV", argLength: 2, reg: gp21, asm: "EQV", typ: "Int64", commutative: true},     // arg0^^arg1
-		{name: "NEG", argLength: 1, reg: gp11, asm: "NEG"},                                      // -arg0 (integer)
-		{name: "FNEG", argLength: 1, reg: fp11, asm: "FNEG"},                                    // -arg0 (floating point)
-		{name: "FSQRT", argLength: 1, reg: fp11, asm: "FSQRT"},                                  // sqrt(arg0) (floating point)
-		{name: "FSQRTS", argLength: 1, reg: fp11, asm: "FSQRTS"},                                // sqrt(arg0) (floating point, single precision)
-		{name: "FFLOOR", argLength: 1, reg: fp11, asm: "FRIM"},                                  // floor(arg0), float64
-		{name: "FCEIL", argLength: 1, reg: fp11, asm: "FRIP"},                                   // ceil(arg0), float64
-		{name: "FTRUNC", argLength: 1, reg: fp11, asm: "FRIZ"},                                  // trunc(arg0), float64
-		{name: "FROUND", argLength: 1, reg: fp11, asm: "FRIN"},                                  // round(arg0), float64
-		{name: "FABS", argLength: 1, reg: fp11, asm: "FABS"},                                    // abs(arg0), float64
-		{name: "FNABS", argLength: 1, reg: fp11, asm: "FNABS"},                                  // -abs(arg0), float64
-		{name: "FCPSGN", argLength: 2, reg: fp21, asm: "FCPSGN"},                                // copysign arg0 -> arg1, float64
+		{name: "AND", argLength: 2, reg: gp21, asm: "AND", commutative: true},                    // arg0&arg1
+		{name: "ANDN", argLength: 2, reg: gp21, asm: "ANDN"},                                     // arg0&^arg1
+		{name: "ANDCC", argLength: 2, reg: gp2cr, asm: "ANDCC", commutative: true, typ: "Flags"}, // arg0&arg1 sets CC
+		{name: "OR", argLength: 2, reg: gp21, asm: "OR", commutative: true},                      // arg0|arg1
+		{name: "ORN", argLength: 2, reg: gp21, asm: "ORN"},                                       // arg0|^arg1
+		{name: "ORCC", argLength: 2, reg: gp2cr, asm: "ORCC", commutative: true, typ: "Flags"},   // arg0|arg1 sets CC
+		{name: "NOR", argLength: 2, reg: gp21, asm: "NOR", commutative: true},                    // ^(arg0|arg1)
+		{name: "XOR", argLength: 2, reg: gp21, asm: "XOR", typ: "Int64", commutative: true},      // arg0^arg1
+		{name: "XORCC", argLength: 2, reg: gp2cr, asm: "XORCC", commutative: true, typ: "Flags"}, // arg0^arg1 sets CC
+		{name: "EQV", argLength: 2, reg: gp21, asm: "EQV", typ: "Int64", commutative: true},      // arg0^^arg1
+		{name: "NEG", argLength: 1, reg: gp11, asm: "NEG"},                                       // -arg0 (integer)
+		{name: "FNEG", argLength: 1, reg: fp11, asm: "FNEG"},                                     // -arg0 (floating point)
+		{name: "FSQRT", argLength: 1, reg: fp11, asm: "FSQRT"},                                   // sqrt(arg0) (floating point)
+		{name: "FSQRTS", argLength: 1, reg: fp11, asm: "FSQRTS"},                                 // sqrt(arg0) (floating point, single precision)
+		{name: "FFLOOR", argLength: 1, reg: fp11, asm: "FRIM"},                                   // floor(arg0), float64
+		{name: "FCEIL", argLength: 1, reg: fp11, asm: "FRIP"},                                    // ceil(arg0), float64
+		{name: "FTRUNC", argLength: 1, reg: fp11, asm: "FRIZ"},                                   // trunc(arg0), float64
+		{name: "FROUND", argLength: 1, reg: fp11, asm: "FRIN"},                                   // round(arg0), float64
+		{name: "FABS", argLength: 1, reg: fp11, asm: "FABS"},                                     // abs(arg0), float64
+		{name: "FNABS", argLength: 1, reg: fp11, asm: "FNABS"},                                   // -abs(arg0), float64
+		{name: "FCPSGN", argLength: 2, reg: fp21, asm: "FCPSGN"},                                 // copysign arg0 -> arg1, float64
 
 		{name: "ORconst", argLength: 1, reg: gp11, asm: "OR", aux: "Int64"},                                                                                     // arg0|aux
 		{name: "XORconst", argLength: 1, reg: gp11, asm: "XOR", aux: "Int64"},                                                                                   // arg0^aux
@@ -364,6 +366,12 @@ func init() {
 		{name: "CMPUconst", argLength: 1, reg: gp1cr, asm: "CMPU", aux: "Int64", typ: "Flags"},
 		{name: "CMPWconst", argLength: 1, reg: gp1cr, asm: "CMPW", aux: "Int32", typ: "Flags"},
 		{name: "CMPWUconst", argLength: 1, reg: gp1cr, asm: "CMPWU", aux: "Int32", typ: "Flags"},
+
+		// ISEL auxInt values 0=LT 1=GT 2=EQ   arg2 ? arg0 : arg1
+		// ISEL auxInt values 4=GE 5=LE 6=NE   arg2 ? arg1 : arg0
+		// ISELB special case where arg0, arg1 values are 0, 1 for boolean result
+		{name: "ISEL", argLength: 3, reg: crgp21, asm: "ISEL", aux: "Int32", typ: "Int32"},  // see above
+		{name: "ISELB", argLength: 2, reg: crgp11, asm: "ISEL", aux: "Int32", typ: "Int32"}, // see above
 
 		// pseudo-ops
 		{name: "Equal", argLength: 1, reg: crgp},         // bool, true flags encode x==y false otherwise.

@@ -42,7 +42,7 @@ func skipInContainer(t *testing.T) {
 	}
 }
 
-func skipNoUserNS(t *testing.T) {
+func skipNoUserNamespaces(t *testing.T) {
 	switch _, err := os.Stat("/proc/self/ns/user"); {
 	case os.IsNotExist(err):
 		t.Skip("kernel doesn't support user namespaces")
@@ -75,7 +75,7 @@ func isChrooted(t *testing.T) bool {
 
 func checkUserNS(t *testing.T) {
 	skipInContainer(t)
-	skipNoUserNS(t)
+	skipNoUserNamespaces(t)
 	if isChrooted(t) {
 		// create_user_ns in the kernel (see
 		// https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/user_namespace.c)
@@ -308,6 +308,7 @@ func TestGroupCleanupUserNamespace(t *testing.T) {
 		"uid=0(root) gid=0(root) groups=0(root),65534(nogroup)",
 		"uid=0(root) gid=0(root) groups=0(root),65534",
 		"uid=0(root) gid=0(root) groups=0(root),65534(nobody),65534(nobody),65534(nobody),65534(nobody),65534(nobody),65534(nobody),65534(nobody),65534(nobody),65534(nobody),65534(nobody)", // Alpine; see https://golang.org/issue/19938
+		"uid=0(root) gid=0(root) groups=0(root) context=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023",                                                                               // CentOS with SELinux context, see https://golang.org/issue/34547
 	}
 	for _, e := range expected {
 		if strOut == e {
@@ -576,7 +577,7 @@ func TestAmbientCaps(t *testing.T) {
 }
 
 func TestAmbientCapsUserns(t *testing.T) {
-	skipNoUserNS(t)
+	checkUserNS(t)
 	testAmbientCaps(t, true)
 }
 

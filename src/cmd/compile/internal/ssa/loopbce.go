@@ -29,6 +29,39 @@ type indVar struct {
 	//	min <  ind <= max    [if flags == indVarMinExc|indVarMaxInc]
 }
 
+// parseIndVar checks whether the SSA value passed as argument is a valid induction
+// variable, and, if so, extracts:
+//   * the minimum bound
+//   * the increment value
+//   * the "next" value (SSA value that is Phi'd into the induction variable every loop)
+// Currently, we detect induction variables that match (Phi min nxt),
+// with nxt being (Add inc ind).
+// If it can't parse the induction variable correctly, it returns (nil, nil, nil).
+func parseIndVar(ind *Value) (min, inc, nxt *Value) {
+	if ind.Op != OpPhi {
+		return
+	}
+
+	if n := ind.Args[0]; n.Op == OpAdd64 && (n.Args[0] == ind || n.Args[1] == ind) {
+		min, nxt = ind.Args[1], n
+	} else if n := ind.Args[1]; n.Op == OpAdd64 && (n.Args[0] == ind || n.Args[1] == ind) {
+		min, nxt = ind.Args[0], n
+	} else {
+		// Not a recognized induction variable.
+		return
+	}
+
+	if nxt.Args[0] == ind { // nxt = ind + inc
+		inc = nxt.Args[1]
+	} else if nxt.Args[1] == ind { // nxt = inc + ind
+		inc = nxt.Args[0]
+	} else {
+		panic("unreachable") // one of the cases must be true from the above.
+	}
+
+	return
+}
+
 // findIndVar finds induction variables in a function.
 //
 // Look for variables and blocks that satisfy the following
@@ -78,36 +111,25 @@ func findIndVar(f *Func) []indVar {
 			continue
 		}
 
-		// See if the arguments are reversed (i < len() <=> len() > i)
+		// See if this is really an induction variable
 		less := true
-		if max.Op == OpPhi {
+		min, inc, nxt := parseIndVar(ind)
+		if min == nil {
+			// We failed to parse the induction variable. Before punting, we want to check
+			// whether the control op was written with arguments in non-idiomatic order,
+			// so that we believe being "max" (the upper bound) is actually the induction
+			// variable itself. This would happen for code like:
+			//     for i := 0; len(n) > i; i++
+			min, inc, nxt = parseIndVar(max)
+			if min == nil {
+				// No recognied induction variable on either operand
+				continue
+			}
+
+			// Ok, the arguments were reversed. Swap them, and remember that we're
+			// looking at a ind >/>= loop (so the induction must be decrementing).
 			ind, max = max, ind
 			less = false
-		}
-
-		// Check that the induction variable is a phi that depends on itself.
-		if ind.Op != OpPhi {
-			continue
-		}
-
-		// Extract min and nxt knowing that nxt is an addition (e.g. Add64).
-		var min, nxt *Value // minimum, and next value
-		if n := ind.Args[0]; n.Op == OpAdd64 && (n.Args[0] == ind || n.Args[1] == ind) {
-			min, nxt = ind.Args[1], n
-		} else if n := ind.Args[1]; n.Op == OpAdd64 && (n.Args[0] == ind || n.Args[1] == ind) {
-			min, nxt = ind.Args[0], n
-		} else {
-			// Not a recognized induction variable.
-			continue
-		}
-
-		var inc *Value
-		if nxt.Args[0] == ind { // nxt = ind + inc
-			inc = nxt.Args[1]
-		} else if nxt.Args[1] == ind { // nxt = inc + ind
-			inc = nxt.Args[0]
-		} else {
-			panic("unreachable") // one of the cases must be true from the above.
 		}
 
 		// Expect the increment to be a nonzero constant.

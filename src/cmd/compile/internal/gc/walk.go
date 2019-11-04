@@ -209,13 +209,8 @@ func walkstmt(n *Node) *Node {
 	case OBLOCK:
 		walkstmtlist(n.List.Slice())
 
-	case OXCASE:
-		yyerror("case statement out of place")
-		n.Op = OCASE
-		fallthrough
-
 	case OCASE:
-		n.Right = walkstmt(n.Right)
+		yyerror("case statement out of place")
 
 	case ODEFER:
 		Curfn.Func.SetHasDefer(true)
@@ -696,12 +691,12 @@ opswitch:
 	case OAS2FUNC:
 		init.AppendNodes(&n.Ninit)
 
-		r := n.Rlist.First()
+		r := n.Right
 		walkexprlistsafe(n.List.Slice(), init)
 		r = walkexpr(r, init)
 
 		if isIntrinsicCall(r) {
-			n.Rlist.Set1(r)
+			n.Right = r
 			break
 		}
 		init.Append(r)
@@ -714,7 +709,7 @@ opswitch:
 	case OAS2RECV:
 		init.AppendNodes(&n.Ninit)
 
-		r := n.Rlist.First()
+		r := n.Right
 		walkexprlistsafe(n.List.Slice(), init)
 		r.Left = walkexpr(r.Left, init)
 		var n1 *Node
@@ -733,7 +728,7 @@ opswitch:
 	case OAS2MAPR:
 		init.AppendNodes(&n.Ninit)
 
-		r := n.Rlist.First()
+		r := n.Right
 		walkexprlistsafe(n.List.Slice(), init)
 		r.Left = walkexpr(r.Left, init)
 		r.Right = walkexpr(r.Right, init)
@@ -772,7 +767,7 @@ opswitch:
 		if ok := n.List.Second(); !ok.isBlank() && ok.Type.IsBoolean() {
 			r.Type.Field(1).Type = ok.Type
 		}
-		n.Rlist.Set1(r)
+		n.Right = r
 		n.Op = OAS2FUNC
 
 		// don't generate a = *var if a is _
@@ -806,7 +801,7 @@ opswitch:
 
 	case OAS2DOTTYPE:
 		walkexprlistsafe(n.List.Slice(), init)
-		n.Rlist.SetFirst(walkexpr(n.Rlist.First(), init))
+		n.Right = walkexpr(n.Right, init)
 
 	case OCONVIFACE:
 		n.Left = walkexpr(n.Left, init)
@@ -1054,7 +1049,7 @@ opswitch:
 				yyerror("index out of bounds")
 			}
 		} else if Isconst(n.Left, CTSTR) {
-			n.SetBounded(bounded(r, int64(len(n.Left.Val().U.(string)))))
+			n.SetBounded(bounded(r, int64(len(strlit(n.Left)))))
 			if Debug['m'] != 0 && n.Bounded() && !Isconst(n.Right, CTINT) {
 				Warn("index bounds check elided")
 			}
@@ -1389,7 +1384,7 @@ opswitch:
 	case OSTR2BYTES:
 		s := n.Left
 		if Isconst(s, CTSTR) {
-			sc := s.Val().U.(string)
+			sc := strlit(s)
 
 			// Allocate a [n]byte of the right size.
 			t := types.NewArray(types.Types[TUINT8], int64(len(sc)))
@@ -1792,7 +1787,7 @@ func walkprint(nn *Node, init *Nodes) *Node {
 	for i := 0; i < len(s); {
 		var strs []string
 		for i < len(s) && Isconst(s[i], CTSTR) {
-			strs = append(strs, s[i].Val().U.(string))
+			strs = append(strs, strlit(s[i]))
 			i++
 		}
 		if len(strs) > 0 {
@@ -1861,7 +1856,7 @@ func walkprint(nn *Node, init *Nodes) *Node {
 		case TSTRING:
 			cs := ""
 			if Isconst(n, CTSTR) {
-				cs = n.Val().U.(string)
+				cs = strlit(n)
 			}
 			switch cs {
 			case " ":
@@ -2510,7 +2505,7 @@ func addstr(n *Node, init *Nodes) *Node {
 		sz := int64(0)
 		for _, n1 := range n.List.Slice() {
 			if n1.Op == OLITERAL {
-				sz += int64(len(n1.Val().U.(string)))
+				sz += int64(len(strlit(n1)))
 			}
 		}
 
@@ -2700,15 +2695,14 @@ func isAppendOfMake(n *Node) bool {
 		return false
 	}
 
-	// y must be either an integer constant or a variable of type int.
-	// typecheck checks that constant arguments to make are not negative and
-	// fit into an int.
-	// runtime.growslice uses int as type for the newcap argument.
-	// Constraining variables to be type int avoids the need for runtime checks
-	// that e.g. check if an int64 value fits into an int.
-	// TODO(moehrmann): support other integer types that always fit in an int
+	// y must be either an integer constant or the largest possible positive value
+	// of variable y needs to fit into an uint.
+
+	// typecheck made sure that constant arguments to make are not negative and fit into an int.
+
+	// The care of overflow of the len argument to make will be handled by an explicit check of int(len) < 0 during runtime.
 	y := second.Left
-	if !Isconst(y, CTINT) && y.Type.Etype != TINT {
+	if !Isconst(y, CTINT) && maxintval[y.Type.Etype].Cmp(maxintval[TUINT]) > 0 {
 		return false
 	}
 
@@ -2717,7 +2711,8 @@ func isAppendOfMake(n *Node) bool {
 
 // extendslice rewrites append(l1, make([]T, l2)...) to
 //   init {
-//     if l2 < 0 {
+//     if l2 >= 0 { // Empty if block here for more meaningful node.SetLikely(true)
+//     } else {
 //       panicmakeslicelen()
 //     }
 //     s := l1
@@ -2742,7 +2737,9 @@ func isAppendOfMake(n *Node) bool {
 //   }
 //   s
 func extendslice(n *Node, init *Nodes) *Node {
-	// isAppendOfMake made sure l2 fits in an int.
+	// isAppendOfMake made sure all possible positive values of l2 fit into an uint.
+	// The case of l2 overflow when converting from e.g. uint to int is handled by an explicit
+	// check of l2 < 0 at runtime which is generated below.
 	l2 := conv(n.List.Second().Left, types.Types[TINT])
 	l2 = typecheck(l2, ctxExpr)
 	n.List.SetSecond(l2) // walkAppendArgs expects l2 in n.List.Second().
@@ -2754,12 +2751,12 @@ func extendslice(n *Node, init *Nodes) *Node {
 
 	var nodes []*Node
 
-	// if l2 < 0
-	nifneg := nod(OIF, nod(OLT, l2, nodintconst(0)), nil)
-	nifneg.SetLikely(false)
+	// if l2 >= 0 (likely happens), do nothing
+	nifneg := nod(OIF, nod(OGE, l2, nodintconst(0)), nil)
+	nifneg.SetLikely(true)
 
-	// panicmakeslicelen()
-	nifneg.Nbody.Set1(mkcall("panicmakeslicelen", nil, init))
+	// else panicmakeslicelen()
+	nifneg.Rlist.Set1(mkcall("panicmakeslicelen", nil, init))
 	nodes = append(nodes, nifneg)
 
 	// s := l1
@@ -3128,35 +3125,15 @@ func walkcompare(n *Node, init *Nodes) *Node {
 
 	// Chose not to inline. Call equality function directly.
 	if !inline {
-		if isvaluelit(cmpl) {
-			var_ := temp(cmpl.Type)
-			anylit(cmpl, var_, init)
-			cmpl = var_
-		}
-		if isvaluelit(cmpr) {
-			var_ := temp(cmpr.Type)
-			anylit(cmpr, var_, init)
-			cmpr = var_
-		}
+		// eq algs take pointers; cmpl and cmpr must be addressable
 		if !islvalue(cmpl) || !islvalue(cmpr) {
 			Fatalf("arguments of comparison must be lvalues - %v %v", cmpl, cmpr)
 		}
 
-		// eq algs take pointers
-		pl := temp(types.NewPtr(t))
-		al := nod(OAS, pl, nod(OADDR, cmpl, nil))
-		al = typecheck(al, ctxStmt)
-		init.Append(al)
-
-		pr := temp(types.NewPtr(t))
-		ar := nod(OAS, pr, nod(OADDR, cmpr, nil))
-		ar = typecheck(ar, ctxStmt)
-		init.Append(ar)
-
 		fn, needsize := eqfor(t)
 		call := nod(OCALL, fn, nil)
-		call.List.Append(pl)
-		call.List.Append(pr)
+		call.List.Append(nod(OADDR, cmpl, nil))
+		call.List.Append(nod(OADDR, cmpr, nil))
 		if needsize {
 			call.List.Append(nodintconst(t.Width))
 		}
@@ -3350,7 +3327,7 @@ func walkcompareString(n *Node, init *Nodes) *Node {
 			// Length-only checks are ok, though.
 			maxRewriteLen = 0
 		}
-		if s := cs.Val().U.(string); len(s) <= maxRewriteLen {
+		if s := strlit(cs); len(s) <= maxRewriteLen {
 			if len(s) > 0 {
 				ncs = safeexpr(ncs, init)
 			}

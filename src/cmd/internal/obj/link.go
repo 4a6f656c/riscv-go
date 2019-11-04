@@ -211,9 +211,6 @@ const (
 	// A reference to name@GOT(SB) is a reference to the entry in the global offset
 	// table for 'name'.
 	NAME_GOTREF
-	// Indicates auto that was optimized away, but whose type
-	// we want to preserve in the DWARF debug info.
-	NAME_DELETED_AUTO
 	// Indicates that this is a reference to a TOC anchor.
 	NAME_TOCREF
 )
@@ -398,15 +395,15 @@ type FuncInfo struct {
 	Args     int32
 	Locals   int32
 	Text     *Prog
-	Autom    []*Auto
+	Autot    map[*LSym]struct{}
 	Pcln     Pcln
 	InlMarks []InlMark
 
-	dwarfInfoSym   *LSym
-	dwarfLocSym    *LSym
-	dwarfRangesSym *LSym
-	dwarfAbsFnSym  *LSym
-	dwarfIsStmtSym *LSym
+	dwarfInfoSym       *LSym
+	dwarfLocSym        *LSym
+	dwarfRangesSym     *LSym
+	dwarfAbsFnSym      *LSym
+	dwarfDebugLinesSym *LSym
 
 	GCArgs       *LSym
 	GCLocals     *LSym
@@ -429,6 +426,15 @@ type InlMark struct {
 // just before the body of the inlined function.
 func (fi *FuncInfo) AddInlMark(p *Prog, id int32) {
 	fi.InlMarks = append(fi.InlMarks, InlMark{p: p, id: id})
+}
+
+// Record the type symbol for an auto variable so that the linker
+// an emit DWARF type information for the type.
+func (fi *FuncInfo) RecordAutoType(gotype *LSym) {
+	if fi.Autot == nil {
+		fi.Autot = make(map[*LSym]struct{})
+	}
+	fi.Autot[gotype] = struct{}{}
 }
 
 //go:generate stringer -type ABI
@@ -644,7 +650,7 @@ type Link struct {
 	Imports            []string
 	DiagFunc           func(string, ...interface{})
 	DiagFlush          func()
-	DebugInfo          func(fn *LSym, curfn interface{}) ([]dwarf.Scope, dwarf.InlCalls) // if non-nil, curfn is a *gc.Node
+	DebugInfo          func(fn *LSym, info *LSym, curfn interface{}) ([]dwarf.Scope, dwarf.InlCalls) // if non-nil, curfn is a *gc.Node
 	GenAbstractFunc    func(fn *LSym)
 	Errors             int
 

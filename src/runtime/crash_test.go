@@ -148,7 +148,7 @@ func TestVDSO(t *testing.T) {
 	output := runTestProg(t, "testprog", "SignalInVDSO")
 	want := "success\n"
 	if output != want {
-		t.Fatalf("output:\n%s\n\nwanted:\n%s", output, want);
+		t.Fatalf("output:\n%s\n\nwanted:\n%s", output, want)
 	}
 }
 
@@ -252,6 +252,30 @@ func TestRecursivePanic(t *testing.T) {
 	output := runTestProg(t, "testprog", "RecursivePanic")
 	want := `wrap: bad
 panic: again
+
+`
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
+	}
+
+}
+
+func TestRecursivePanic2(t *testing.T) {
+	output := runTestProg(t, "testprog", "RecursivePanic2")
+	want := `first panic
+second panic
+panic: third panic
+
+`
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
+	}
+
+}
+
+func TestRecursivePanic3(t *testing.T) {
+	output := runTestProg(t, "testprog", "RecursivePanic3")
+	want := `panic: first panic
 
 `
 	if !strings.HasPrefix(output, want) {
@@ -422,7 +446,7 @@ func TestNetpollDeadlock(t *testing.T) {
 func TestPanicTraceback(t *testing.T) {
 	t.Parallel()
 	output := runTestProg(t, "testprog", "PanicTraceback")
-	want := "panic: hello"
+	want := "panic: hello\n\tpanic: panic pt2\n\tpanic: panic pt1\n"
 	if !strings.HasPrefix(output, want) {
 		t.Fatalf("output does not start with %q:\n%s", want, output)
 	}
