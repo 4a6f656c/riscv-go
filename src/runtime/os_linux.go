@@ -296,6 +296,7 @@ func getHugePageSize() uintptr {
 func osinit() {
 	ncpu = getproccount()
 	physHugePageSize = getHugePageSize()
+	osArchInit()
 }
 
 var urandom_dev = []byte("/dev/urandom\x00")
@@ -325,11 +326,20 @@ func libpreinit() {
 	initsig(true)
 }
 
+// gsignalInitQuirk, if non-nil, is called for every allocated gsignal G.
+//
+// TODO(austin): Remove this after Go 1.15 when we remove the
+// mlockGsignal workaround.
+var gsignalInitQuirk func(gsignal *g)
+
 // Called to initialize a new m (including the bootstrap m).
 // Called on the parent thread (main thread in case of bootstrap), can allocate memory.
 func mpreinit(mp *m) {
 	mp.gsignal = malg(32 * 1024) // Linux wants >= 2K
 	mp.gsignal.m = mp
+	if gsignalInitQuirk != nil {
+		gsignalInitQuirk(mp.gsignal)
+	}
 }
 
 func gettid() uint32
@@ -381,6 +391,8 @@ func raiseproc(sig uint32)
 func sched_getaffinity(pid, len uintptr, buf *byte) int32
 func osyield()
 
+func pipe() (r, w int32, errno int32)
+func pipe2(flags int32) (r, w int32, errno int32)
 func setNonblock(fd int32)
 
 //go:nosplit

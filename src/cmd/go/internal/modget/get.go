@@ -373,12 +373,14 @@ func runGet(cmd *base.Command, args []string) {
 
 		default:
 			// The argument is a package or module path.
-			if pkgs := modload.TargetPackages(path); len(pkgs) != 0 {
-				// The path is in the main module. Nothing to query.
-				if vers != "upgrade" && vers != "patch" {
-					base.Errorf("go get %s: can't request explicit version of path in main module", arg)
+			if modload.HasModRoot() {
+				if pkgs := modload.TargetPackages(path); len(pkgs) != 0 {
+					// The path is in the main module. Nothing to query.
+					if vers != "upgrade" && vers != "patch" {
+						base.Errorf("go get %s: can't request explicit version of path in main module", arg)
+					}
+					continue
 				}
-				continue
 			}
 
 			first := path
@@ -452,10 +454,13 @@ func runGet(cmd *base.Command, args []string) {
 	// This includes explicitly requested modules that don't have a root package
 	// and modules with a target version of "none".
 	var wg sync.WaitGroup
+	var modOnlyMu sync.Mutex
 	modOnly := make(map[string]*query)
 	for _, q := range queries {
 		if q.m.Version == "none" {
+			modOnlyMu.Lock()
 			modOnly[q.m.Path] = q
+			modOnlyMu.Unlock()
 			continue
 		}
 		if q.path == q.m.Path {
@@ -464,7 +469,9 @@ func runGet(cmd *base.Command, args []string) {
 				if hasPkg, err := modload.ModuleHasRootPackage(q.m); err != nil {
 					base.Errorf("go get: %v", err)
 				} else if !hasPkg {
+					modOnlyMu.Lock()
 					modOnly[q.m.Path] = q
+					modOnlyMu.Unlock()
 				}
 				wg.Done()
 			}(q)

@@ -15,11 +15,8 @@ TEXT runtime·memequal(SB),NOSPLIT|NOFRAME,$0-25
 	MOV	size+16(FP), A3
 	ADD	A1, A3, A4
 loop:
-	BNE	A1, A4, test
-	MOV	$1, A1
-	MOVB	A1, ret+24(FP)
-	RET
-test:
+	BEQ	A1, A4, eq
+
 	MOVBU	(A1), A6
 	ADD	$1, A1
 	MOVBU	(A2), A7

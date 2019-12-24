@@ -118,6 +118,7 @@ func suspendG(gp *g) suspendGState {
 	stopped := false
 	var asyncM *m
 	var asyncGen uint32
+	var nextPreemptM int64
 	for i := 0; ; i++ {
 		switch s := readgstatus(gp); s {
 		default:
@@ -205,14 +206,32 @@ func suspendG(gp *g) suspendGState {
 			gp.preempt = true
 			gp.stackguard0 = stackPreempt
 
-			// Send asynchronous preemption.
-			asyncM = gp.m
-			asyncGen = atomic.Load(&asyncM.preemptGen)
-			if preemptMSupported && debug.asyncpreemptoff == 0 {
-				preemptM(asyncM)
-			}
+			// Prepare for asynchronous preemption.
+			asyncM2 := gp.m
+			asyncGen2 := atomic.Load(&asyncM2.preemptGen)
+			needAsync := asyncM != asyncM2 || asyncGen != asyncGen2
+			asyncM = asyncM2
+			asyncGen = asyncGen2
 
 			casfrom_Gscanstatus(gp, _Gscanrunning, _Grunning)
+
+			// Send asynchronous preemption. We do this
+			// after CASing the G back to _Grunning
+			// because preemptM may be synchronous and we
+			// don't want to catch the G just spinning on
+			// its status.
+			if preemptMSupported && debug.asyncpreemptoff == 0 && needAsync {
+				// Rate limit preemptM calls. This is
+				// particularly important on Windows
+				// where preemptM is actually
+				// synchronous and the spin loop here
+				// can lead to live-lock.
+				now := nanotime()
+				if now >= nextPreemptM {
+					nextPreemptM = now + yieldDelay/2
+					preemptM(asyncM)
+				}
+			}
 		}
 
 		// TODO: Don't busy wait. This loop should really only
@@ -337,7 +356,7 @@ func wantAsyncPreempt(gp *g) bool {
 // 3. It's generally safe to interact with the runtime, even if we're
 // in a signal handler stopped here. For example, there are no runtime
 // locks held, so acquiring a runtime lock won't self-deadlock.
-func isAsyncSafePoint(gp *g, pc, sp uintptr) bool {
+func isAsyncSafePoint(gp *g, pc, sp, lr uintptr) bool {
 	mp := gp.m
 
 	// Only user Gs can have safe-points. We check this first
@@ -363,7 +382,18 @@ func isAsyncSafePoint(gp *g, pc, sp uintptr) bool {
 		// Not Go code.
 		return false
 	}
-	smi := pcdatavalue(f, _PCDATA_StackMapIndex, pc, nil)
+	if (GOARCH == "mips" || GOARCH == "mipsle" || GOARCH == "mips64" || GOARCH == "mips64le") && lr == pc+8 && funcspdelta(f, pc, nil) == 0 {
+		// We probably stopped at a half-executed CALL instruction,
+		// where the LR is updated but the PC has not. If we preempt
+		// here we'll see a seemingly self-recursive call, which is in
+		// fact not.
+		// This is normally ok, as we use the return address saved on
+		// stack for unwinding, not the LR value. But if this is a
+		// call to morestack, we haven't created the frame, and we'll
+		// use the LR for unwinding, which will be bad.
+		return false
+	}
+	smi := pcdatavalue(f, _PCDATA_RegMapIndex, pc, nil)
 	if smi == -2 {
 		// Unsafe-point marked by compiler. This includes
 		// atomic sequences (e.g., write barrier) and nosplit
@@ -381,9 +411,17 @@ func isAsyncSafePoint(gp *g, pc, sp uintptr) bool {
 		// locals pointer map, like empty frame functions?
 		return false
 	}
-	if hasPrefix(funcname(f), "runtime.") ||
-		hasPrefix(funcname(f), "runtime/internal/") ||
-		hasPrefix(funcname(f), "reflect.") {
+	name := funcname(f)
+	if inldata := funcdata(f, _FUNCDATA_InlTree); inldata != nil {
+		inltree := (*[1 << 20]inlinedCall)(inldata)
+		ix := pcdatavalue(f, _PCDATA_InlTreeIndex, pc, nil)
+		if ix >= 0 {
+			name = funcnameFromNameoff(f, inltree[ix].func_)
+		}
+	}
+	if hasPrefix(name, "runtime.") ||
+		hasPrefix(name, "runtime/internal/") ||
+		hasPrefix(name, "reflect.") {
 		// For now we never async preempt the runtime or
 		// anything closely tied to the runtime. Known issues
 		// include: various points in the scheduler ("don't

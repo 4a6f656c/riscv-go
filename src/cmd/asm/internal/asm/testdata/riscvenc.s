@@ -269,38 +269,38 @@ start:
 	MOVD	F0, F1					// d3000022
 
 	// These jumps can get printed as jumps to 2 because they go to the
-	// second instruction in the function.  (The first instruction is an
-	// invisible stack pointer adjustment.)
-	JMP	start		// JMP	2	// 6ff0dfcd
-	JMP	(X5)				// 67800200
-	JMP	4(X5)				// 67804200
+	// second instruction in the function (the first instruction is an
+	// invisible stack pointer adjustment).
+	JMP	start		// JMP	2		// 6ff05fcd
+	JMP	(X5)					// 67800200
+	JMP	4(X5)					// 67804200
 
-	// Encoded as
+	// JMP and CALL to symbol are encoded as:
 	//	AUIPC $0, TMP
-	//	ADDI $0, TMP
-	//	JALR TMP
-	// with a R_RISCV_PCREL_ITYPE relocation. The linker resolves the real
-	// address.
-	CALL	asmtest(SB)			// 970f0000
+	//	JALR $0, TMP
+	// with a R_RISCV_PCREL_ITYPE relocation - the linker resolves the
+	// real address and updates the immediates for both instructions.
+	CALL	asmtest(SB)				// 970f0000
+	JMP	asmtest(SB)				// 970f0000
 
-	// Encoded as
-	//	AUIPC $0, TMP
-	//	ADDI $0, TMP
-	//	JMP TMP
-	// with a R_RISCV_PCREL_ITYPE relocation. The linker resolves the real
-	// address.
-	JMP	asmtest(SB)			// 970f0000
-
-	SEQZ	X15, X15			// 93b71700
-	SNEZ	X15, X15			// b337f000
+	SEQZ	X15, X15				// 93b71700
+	SNEZ	X15, X15				// b337f000
 
 	// F extension
-	FNEGS	F0, F1				// d3100020
-	FNES	F0, F1, X7			// d3a300a0
+	FNEGS	F0, F1					// d3100020
+
+	// TODO(jsing): FNES gets encoded as FEQS+XORI - this should
+	// be handled as a single *obj.Prog so that the full two
+	// instruction encoding is tested here.
+	FNES	F0, F1, X7				// d3a300a0
 
 	// D extension
-	FNEGD	F0, F1				// d3100022
-	FEQD	F0, F1, X5			// d3a200a2
-	FNED	F0, F1, X5			// d3a200a2
-	FLTD	F0, F1, X5			// d39200a2
-	FLED	F0, F1, X5			// d38200a2
+	FNEGD	F0, F1					// d3100022
+	FEQD	F0, F1, X5				// d3a200a2
+	FLTD	F0, F1, X5				// d39200a2
+	FLED	F0, F1, X5				// d38200a2
+
+	// TODO(jsing): FNED gets encoded as FEQD+XORI - this should
+	// be handled as a single *obj.Prog so that the full two
+	// instruction encoding is tested here.
+	FNED	F0, F1, X5				// d3a200a2

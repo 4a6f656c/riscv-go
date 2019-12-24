@@ -269,6 +269,35 @@ func (n *Node) funcname() string {
 	return n.Func.Nname.Sym.Name
 }
 
+// pkgFuncName returns the name of the function referenced by n, with package prepended.
+// This differs from the compiler's internal convention where local functions lack a package
+// because the ultimate consumer of this is a human looking at an IDE; package is only empty
+// if the compilation package is actually the empty string.
+func (n *Node) pkgFuncName() string {
+	var s *types.Sym
+	if n == nil {
+		return "<nil>"
+	}
+	if n.Op == ONAME {
+		s = n.Sym
+	} else {
+		if n.Func == nil || n.Func.Nname == nil {
+			return "<nil>"
+		}
+		s = n.Func.Nname.Sym
+	}
+	pkg := s.Pkg
+
+	p := myimportpath
+	if pkg != nil && pkg.Path != "" {
+		p = pkg.Path
+	}
+	if p == "" {
+		return s.Name
+	}
+	return p + "." + s.Name
+}
+
 // Name holds Node fields used only by named nodes (ONAME, OTYPE, OPACK, OLABEL, some OLITERAL).
 type Name struct {
 	Pack      *Node      // real package for import . names
@@ -293,9 +322,10 @@ const (
 	nameIsOutputParamHeapAddr // pointer to a result parameter's heap copy
 	nameAssigned              // is the variable ever assigned to
 	nameAddrtaken             // address taken, even if not moved to heap
-	nameInlFormal             // OPAUTO created by inliner, derived from callee formal
-	nameInlLocal              // OPAUTO created by inliner, derived from callee local
+	nameInlFormal             // PAUTO created by inliner, derived from callee formal
+	nameInlLocal              // PAUTO created by inliner, derived from callee local
 	nameOpenDeferSlot         // if temporary var storing info for open-coded defers
+	nameLibfuzzerExtraCounter // if PEXTERN should be assigned to __libfuzzer_extra_counters section
 )
 
 func (n *Name) Captured() bool              { return n.flags&nameCaptured != 0 }
@@ -312,6 +342,7 @@ func (n *Name) Addrtaken() bool             { return n.flags&nameAddrtaken != 0 
 func (n *Name) InlFormal() bool             { return n.flags&nameInlFormal != 0 }
 func (n *Name) InlLocal() bool              { return n.flags&nameInlLocal != 0 }
 func (n *Name) OpenDeferSlot() bool         { return n.flags&nameOpenDeferSlot != 0 }
+func (n *Name) LibfuzzerExtraCounter() bool { return n.flags&nameLibfuzzerExtraCounter != 0 }
 
 func (n *Name) SetCaptured(b bool)              { n.flags.set(nameCaptured, b) }
 func (n *Name) SetReadonly(b bool)              { n.flags.set(nameReadonly, b) }
@@ -327,6 +358,7 @@ func (n *Name) SetAddrtaken(b bool)             { n.flags.set(nameAddrtaken, b) 
 func (n *Name) SetInlFormal(b bool)             { n.flags.set(nameInlFormal, b) }
 func (n *Name) SetInlLocal(b bool)              { n.flags.set(nameInlLocal, b) }
 func (n *Name) SetOpenDeferSlot(b bool)         { n.flags.set(nameOpenDeferSlot, b) }
+func (n *Name) SetLibfuzzerExtraCounter(b bool) { n.flags.set(nameLibfuzzerExtraCounter, b) }
 
 type Param struct {
 	Ntype    *Node

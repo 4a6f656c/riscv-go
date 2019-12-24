@@ -651,7 +651,7 @@ opswitch:
 
 		case ORECV:
 			// x = <-c; n.Left is x, n.Right.Left is c.
-			// orderstmt made sure x is addressable.
+			// order.stmt made sure x is addressable.
 			n.Right.Left = walkexpr(n.Right.Left, init)
 
 			n1 := nod(OADDR, n.Left, nil)
@@ -753,7 +753,7 @@ opswitch:
 			key = r.Right
 		} else {
 			// standard version takes key by reference
-			// orderexpr made sure key is addressable.
+			// order.expr made sure key is addressable.
 			key = nod(OADDR, r.Right, nil)
 		}
 
@@ -806,7 +806,7 @@ opswitch:
 		t := map_.Type
 		fast := mapfast(t)
 		if fast == mapslow {
-			// orderstmt made sure key is addressable.
+			// order.stmt made sure key is addressable.
 			key = nod(OADDR, key, nil)
 		}
 		n = mkcall1(mapfndel(mapdelete[fast], t), nil, init, typename(t), map_, key)
@@ -945,7 +945,7 @@ opswitch:
 			// Orderexpr arranged for n.Left to be a temporary for all
 			// the conversions it could see. Comparison of an interface
 			// with a non-interface, especially in a switch on interface value
-			// with non-interface cases, is not visible to orderstmt, so we
+			// with non-interface cases, is not visible to order.stmt, so we
 			// have to fall back on allocating a temp here.
 			if !islvalue(v) {
 				v = copyexpr(v, v.Type, init)
@@ -1098,7 +1098,7 @@ opswitch:
 			fast := mapfast(t)
 			if fast == mapslow {
 				// standard version takes key by reference.
-				// orderexpr made sure key is addressable.
+				// order.expr made sure key is addressable.
 				key = nod(OADDR, key, nil)
 			}
 			n = mkcall1(mapfn(mapassign[fast], t), nil, init, typename(t), map_, key)
@@ -1107,7 +1107,7 @@ opswitch:
 			fast := mapfast(t)
 			if fast == mapslow {
 				// standard version takes key by reference.
-				// orderexpr made sure key is addressable.
+				// order.expr made sure key is addressable.
 				key = nod(OADDR, key, nil)
 			}
 
@@ -2526,7 +2526,7 @@ func writebarrierfn(name string, l *types.Type, r *types.Type) *Node {
 }
 
 func addstr(n *Node, init *Nodes) *Node {
-	// orderexpr rewrote OADDSTR to have a list of strings.
+	// order.expr rewrote OADDSTR to have a list of strings.
 	c := n.List.Len()
 
 	if c < 2 {
@@ -2559,7 +2559,7 @@ func addstr(n *Node, init *Nodes) *Node {
 	var fn string
 	if c <= 5 {
 		// small numbers of strings use direct runtime helpers.
-		// note: orderexpr knows this cutoff too.
+		// note: order.expr knows this cutoff too.
 		fn = fmt.Sprintf("concatstring%d", c)
 	} else {
 		// large numbers of strings are passed to the runtime as a slice.
@@ -3139,6 +3139,52 @@ func walkcompare(n *Node, init *Nodes) *Node {
 
 	switch t.Etype {
 	default:
+		if Debug_libfuzzer != 0 && t.IsInteger() {
+			n.Left = cheapexpr(n.Left, init)
+			n.Right = cheapexpr(n.Right, init)
+
+			// If exactly one comparison operand is
+			// constant, invoke the constcmp functions
+			// instead, and arrange for the constant
+			// operand to be the first argument.
+			l, r := n.Left, n.Right
+			if r.Op == OLITERAL {
+				l, r = r, l
+			}
+			constcmp := l.Op == OLITERAL && r.Op != OLITERAL
+
+			var fn string
+			var paramType *types.Type
+			switch t.Size() {
+			case 1:
+				fn = "libfuzzerTraceCmp1"
+				if constcmp {
+					fn = "libfuzzerTraceConstCmp1"
+				}
+				paramType = types.Types[TUINT8]
+			case 2:
+				fn = "libfuzzerTraceCmp2"
+				if constcmp {
+					fn = "libfuzzerTraceConstCmp2"
+				}
+				paramType = types.Types[TUINT16]
+			case 4:
+				fn = "libfuzzerTraceCmp4"
+				if constcmp {
+					fn = "libfuzzerTraceConstCmp4"
+				}
+				paramType = types.Types[TUINT32]
+			case 8:
+				fn = "libfuzzerTraceCmp8"
+				if constcmp {
+					fn = "libfuzzerTraceConstCmp8"
+				}
+				paramType = types.Types[TUINT64]
+			default:
+				Fatalf("unexpected integer size %d for %v", t.Size(), t)
+			}
+			init.Append(mkcall(fn, nil, init, tracecmpArg(l, paramType, init), tracecmpArg(r, paramType, init)))
+		}
 		return n
 	case TARRAY:
 		// We can compare several elements at once with 2/4/8 byte integer compares
@@ -3274,6 +3320,15 @@ func walkcompare(n *Node, init *Nodes) *Node {
 	}
 	n = finishcompare(n, expr, init)
 	return n
+}
+
+func tracecmpArg(n *Node, t *types.Type, init *Nodes) *Node {
+	// Ugly hack to avoid "constant -1 overflows uintptr" errors, etc.
+	if n.Op == OLITERAL && n.Type.IsSigned() && n.Int64() < 0 {
+		n = copyexpr(n, n.Type, init)
+	}
+
+	return conv(n, t)
 }
 
 func walkcompareInterface(n *Node, init *Nodes) *Node {

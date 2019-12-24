@@ -147,6 +147,68 @@ func TestCallersAfterRecovery(t *testing.T) {
 	panic(1)
 }
 
+func TestCallersAbortedPanic(t *testing.T) {
+	want := []string{"runtime.Callers", "runtime_test.TestCallersAbortedPanic.func2", "runtime_test.TestCallersAbortedPanic"}
+
+	defer func() {
+		r := recover()
+		if r != nil {
+			t.Fatalf("should be no panic remaining to recover")
+		}
+	}()
+
+	defer func() {
+		// panic2 was aborted/replaced by panic1, so when panic2 was
+		// recovered, there is no remaining panic on the stack.
+		pcs := make([]uintptr, 20)
+		pcs = pcs[:runtime.Callers(0, pcs)]
+		testCallersEqual(t, pcs, want)
+	}()
+	defer func() {
+		r := recover()
+		if r != "panic2" {
+			t.Fatalf("got %v, wanted %v", r, "panic2")
+		}
+	}()
+	defer func() {
+		// panic2 aborts/replaces panic1, because it is a recursive panic
+		// that is not recovered within the defer function called by
+		// panic1 panicking sequence
+		panic("panic2")
+	}()
+	panic("panic1")
+}
+
+func TestCallersAbortedPanic2(t *testing.T) {
+	want := []string{"runtime.Callers", "runtime_test.TestCallersAbortedPanic2.func2", "runtime_test.TestCallersAbortedPanic2"}
+	defer func() {
+		r := recover()
+		if r != nil {
+			t.Fatalf("should be no panic remaining to recover")
+		}
+	}()
+	defer func() {
+		pcs := make([]uintptr, 20)
+		pcs = pcs[:runtime.Callers(0, pcs)]
+		testCallersEqual(t, pcs, want)
+	}()
+	func() {
+		defer func() {
+			r := recover()
+			if r != "panic2" {
+				t.Fatalf("got %v, wanted %v", r, "panic2")
+			}
+		}()
+		func() {
+			defer func() {
+				// Again, panic2 aborts/replaces panic1
+				panic("panic2")
+			}()
+			panic("panic1")
+		}()
+	}()
+}
+
 func TestCallersNilPointerPanic(t *testing.T) {
 	// Make sure we don't have any extra frames on the stack (due to
 	// open-coded defer processing)
@@ -192,9 +254,8 @@ func TestCallersDivZeroPanic(t *testing.T) {
 func TestCallersDeferNilFuncPanic(t *testing.T) {
 	// Make sure we don't have any extra frames on the stack. We cut off the check
 	// at runtime.sigpanic, because non-open-coded defers (which may be used in
-	// non-opt or race checker mode) include an extra 'jmpdefer' frame (which is
-	// where the nil pointer deref happens). We could consider hiding jmpdefer in
-	// tracebacks.
+	// non-opt or race checker mode) include an extra 'deferreturn' frame (which is
+	// where the nil pointer deref happens).
 	state := 1
 	want := []string{"runtime.Callers", "runtime_test.TestCallersDeferNilFuncPanic.func1",
 		"runtime.gopanic", "runtime.panicmem", "runtime.sigpanic"}
@@ -213,6 +274,35 @@ func TestCallersDeferNilFuncPanic(t *testing.T) {
 	}()
 	var f func()
 	defer f()
+	// Use the value of 'state' to make sure nil defer func f causes panic at
+	// function exit, rather than at the defer statement.
+	state = 2
+}
+
+// Same test, but forcing non-open-coded defer by putting the defer in a loop.  See
+// issue #36050
+func TestCallersDeferNilFuncPanicWithLoop(t *testing.T) {
+	state := 1
+	want := []string{"runtime.Callers", "runtime_test.TestCallersDeferNilFuncPanicWithLoop.func1",
+		"runtime.gopanic", "runtime.panicmem", "runtime.sigpanic", "runtime.deferreturn", "runtime_test.TestCallersDeferNilFuncPanicWithLoop"}
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("did not panic")
+		}
+		pcs := make([]uintptr, 20)
+		pcs = pcs[:runtime.Callers(0, pcs)]
+		testCallersEqual(t, pcs, want)
+		if state == 1 {
+			t.Fatal("nil defer func panicked at defer time rather than function exit time")
+		}
+
+	}()
+
+	for i := 0; i < 1; i++ {
+		var f func()
+		defer f()
+	}
 	// Use the value of 'state' to make sure nil defer func f causes panic at
 	// function exit, rather than at the defer statement.
 	state = 2

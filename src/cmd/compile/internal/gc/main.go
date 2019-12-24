@@ -9,6 +9,7 @@ package gc
 import (
 	"bufio"
 	"bytes"
+	"cmd/compile/internal/logopt"
 	"cmd/compile/internal/ssa"
 	"cmd/compile/internal/types"
 	"cmd/internal/bio"
@@ -44,6 +45,7 @@ var (
 	Debug_closure      int
 	Debug_compilelater int
 	debug_dclstack     int
+	Debug_libfuzzer    int
 	Debug_panic        int
 	Debug_slice        int
 	Debug_vlog         bool
@@ -73,6 +75,7 @@ var debugtab = []struct {
 	{"disablenil", "disable nil checks", &disable_checknil},
 	{"dclstack", "run internal dclstack check", &debug_dclstack},
 	{"gcprog", "print dump of GC programs", &Debug_gcprog},
+	{"libfuzzer", "coverage instrumentation for libfuzzer", &Debug_libfuzzer},
 	{"nil", "print information about nil checks", &Debug_checknil},
 	{"panic", "do not hide any compiler panic", &Debug_panic},
 	{"slice", "print information about slice compilation", &Debug_slice},
@@ -201,6 +204,7 @@ func Main(archInit func(*Arch)) {
 	// Whether the limit for stack-allocated objects is much smaller than normal.
 	// This can be helpful for diagnosing certain causes of GC latency. See #27732.
 	smallFrames := false
+	jsonLogOpt := ""
 
 	flag.BoolVar(&compiling_runtime, "+", false, "compiling runtime")
 	flag.BoolVar(&compiling_std, "std", false, "compiling standard library")
@@ -258,6 +262,7 @@ func Main(archInit func(*Arch)) {
 	if supportsDynlink(thearch.LinkArch.Arch) {
 		flag.BoolVar(&flag_shared, "shared", false, "generate code that can be linked into a shared library")
 		flag.BoolVar(&flag_dynlink, "dynlink", false, "support references to Go symbols defined in other shared libraries")
+		flag.BoolVar(&Ctxt.Flag_linkshared, "linkshared", false, "generate code that will be linked against Go shared libraries")
 	}
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
 	flag.StringVar(&memprofile, "memprofile", "", "write memory profile to `file`")
@@ -272,12 +277,15 @@ func Main(archInit func(*Arch)) {
 	flag.StringVar(&benchfile, "bench", "", "append benchmark times to `file`")
 	flag.BoolVar(&smallFrames, "smallframes", false, "reduce the size limit for stack allocated objects")
 	flag.BoolVar(&Ctxt.UseBASEntries, "dwarfbasentries", Ctxt.UseBASEntries, "use base address selection entries in DWARF")
+	flag.BoolVar(&Ctxt.Flag_newobj, "newobj", false, "use new object file format")
+	flag.StringVar(&jsonLogOpt, "json", "", "version,destination for JSON compiler/optimizer logging")
+
 	objabi.Flagparse(usage)
 
 	// Record flags that affect the build result. (And don't
 	// record flags that don't, since that would cause spurious
 	// changes in the binary.)
-	recordFlags("B", "N", "l", "msan", "race", "shared", "dynlink", "dwarflocationlists", "dwarfbasentries", "smallframes")
+	recordFlags("B", "N", "l", "msan", "race", "shared", "dynlink", "dwarflocationlists", "dwarfbasentries", "smallframes", "newobj")
 
 	if smallFrames {
 		maxStackVarSize = 128 * 1024
@@ -447,9 +455,12 @@ func Main(archInit func(*Arch)) {
 		}
 	}
 
-	// Runtime can't use -d=checkptr, at least not yet.
 	if compiling_runtime {
+		// Runtime can't use -d=checkptr, at least not yet.
 		Debug_checkptr = 0
+
+		// Fuzzing the runtime isn't interesting either.
+		Debug_libfuzzer = 0
 	}
 
 	// set via a -d flag
@@ -468,6 +479,10 @@ func Main(archInit func(*Arch)) {
 	//	-l=2, -l=3: inlining on again, with extra debugging (debug['l'] > 1)
 	if Debug['l'] <= 1 {
 		Debug['l'] = 1 - Debug['l']
+	}
+
+	if jsonLogOpt != "" { // parse version,destination from json logging optimization.
+		logopt.LogJsonOption(jsonLogOpt)
 	}
 
 	ssaDump = os.Getenv("GOSSAFUNC")
@@ -511,7 +526,7 @@ func Main(archInit func(*Arch)) {
 	}
 	types.FmtLeft = int(FmtLeft)
 	types.FmtUnsigned = int(FmtUnsigned)
-	types.FErr = FErr
+	types.FErr = int(FErr)
 	types.Ctxt = Ctxt
 
 	initUniverse()
@@ -741,6 +756,8 @@ func Main(archInit func(*Arch)) {
 
 	// Write object data to disk.
 	timings.Start("be", "dumpobj")
+	dumpdata()
+	Ctxt.NumberSyms(false)
 	dumpobj()
 	if asmhdr != "" {
 		dumpasmhdr()
@@ -761,6 +778,8 @@ func Main(archInit func(*Arch)) {
 	if len(compilequeue) != 0 {
 		Fatalf("%d uncompiled functions", len(compilequeue))
 	}
+
+	logopt.FlushLoggedOpts(Ctxt, myimportpath)
 
 	if nerrors+nsavederrors != 0 {
 		errorexit()
@@ -1467,8 +1486,18 @@ type lang struct {
 // any language version is supported.
 var langWant lang
 
-// langSupported reports whether language version major.minor is supported.
-func langSupported(major, minor int) bool {
+// langSupported reports whether language version major.minor is
+// supported in a particular package.
+func langSupported(major, minor int, pkg *types.Pkg) bool {
+	if pkg == nil {
+		// TODO(mdempsky): Set Pkg for local types earlier.
+		pkg = localpkg
+	}
+	if pkg != localpkg {
+		// Assume imported packages passed type-checking.
+		return true
+	}
+
 	if langWant.major == 0 && langWant.minor == 0 {
 		return true
 	}

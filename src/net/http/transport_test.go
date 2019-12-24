@@ -591,6 +591,7 @@ func TestTransportMaxConnsPerHostIncludeDialInProgress(t *testing.T) {
 
 func TestTransportMaxConnsPerHost(t *testing.T) {
 	defer afterTest(t)
+	CondSkipHTTP2(t)
 
 	h := HandlerFunc(func(w ResponseWriter, r *Request) {
 		_, err := w.Write([]byte("foo"))
@@ -1439,6 +1440,72 @@ func TestTransportProxy(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Issue 28012: verify that the Transport closes its TCP connection to http proxies
+// when they're slow to reply to HTTPS CONNECT responses.
+func TestTransportProxyHTTPSConnectLeak(t *testing.T) {
+	setParallel(t)
+	defer afterTest(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ln := newLocalListener(t)
+	defer ln.Close()
+	listenerDone := make(chan struct{})
+	go func() {
+		defer close(listenerDone)
+		c, err := ln.Accept()
+		if err != nil {
+			t.Errorf("Accept: %v", err)
+			return
+		}
+		defer c.Close()
+		// Read the CONNECT request
+		br := bufio.NewReader(c)
+		cr, err := ReadRequest(br)
+		if err != nil {
+			t.Errorf("proxy server failed to read CONNECT request")
+			return
+		}
+		if cr.Method != "CONNECT" {
+			t.Errorf("unexpected method %q", cr.Method)
+			return
+		}
+
+		// Now hang and never write a response; instead, cancel the request and wait
+		// for the client to close.
+		// (Prior to Issue 28012 being fixed, we never closed.)
+		cancel()
+		var buf [1]byte
+		_, err = br.Read(buf[:])
+		if err != io.EOF {
+			t.Errorf("proxy server Read err = %v; want EOF", err)
+		}
+		return
+	}()
+
+	c := &Client{
+		Transport: &Transport{
+			Proxy: func(*Request) (*url.URL, error) {
+				return url.Parse("http://" + ln.Addr().String())
+			},
+		},
+	}
+	req, err := NewRequestWithContext(ctx, "GET", "https://golang.fake.tld/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Do(req)
+	if err == nil {
+		t.Errorf("unexpected Get success")
+	}
+
+	// Wait unconditionally for the listener goroutine to exit: this should never
+	// hang, so if it does we want a full goroutine dump — and that's exactly what
+	// the testing package will give us when the test run times out.
+	<-listenerDone
 }
 
 // Issue 16997: test transport dial preserves typed errors
@@ -3505,6 +3572,90 @@ func TestTransportDialTLS(t *testing.T) {
 	}
 }
 
+func TestTransportDialContext(t *testing.T) {
+	setParallel(t)
+	defer afterTest(t)
+	var mu sync.Mutex // guards following
+	var gotReq bool
+	var receivedContext context.Context
+
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		mu.Lock()
+		gotReq = true
+		mu.Unlock()
+	}))
+	defer ts.Close()
+	c := ts.Client()
+	c.Transport.(*Transport).DialContext = func(ctx context.Context, netw, addr string) (net.Conn, error) {
+		mu.Lock()
+		receivedContext = ctx
+		mu.Unlock()
+		return net.Dial(netw, addr)
+	}
+
+	req, err := NewRequest("GET", ts.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), "some-key", "some-value")
+	res, err := c.Do(req.WithContext(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	mu.Lock()
+	if !gotReq {
+		t.Error("didn't get request")
+	}
+	if receivedContext != ctx {
+		t.Error("didn't receive correct context")
+	}
+}
+
+func TestTransportDialTLSContext(t *testing.T) {
+	setParallel(t)
+	defer afterTest(t)
+	var mu sync.Mutex // guards following
+	var gotReq bool
+	var receivedContext context.Context
+
+	ts := httptest.NewTLSServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		mu.Lock()
+		gotReq = true
+		mu.Unlock()
+	}))
+	defer ts.Close()
+	c := ts.Client()
+	c.Transport.(*Transport).DialTLSContext = func(ctx context.Context, netw, addr string) (net.Conn, error) {
+		mu.Lock()
+		receivedContext = ctx
+		mu.Unlock()
+		c, err := tls.Dial(netw, addr, c.Transport.(*Transport).TLSClientConfig)
+		if err != nil {
+			return nil, err
+		}
+		return c, c.Handshake()
+	}
+
+	req, err := NewRequest("GET", ts.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), "some-key", "some-value")
+	res, err := c.Do(req.WithContext(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	mu.Lock()
+	if !gotReq {
+		t.Error("didn't get request")
+	}
+	if receivedContext != ctx {
+		t.Error("didn't receive correct context")
+	}
+}
+
 // Test for issue 8755
 // Ensure that if a proxy returns an error, it is exposed by RoundTrip
 func TestRoundTripReturnsProxyError(t *testing.T) {
@@ -3632,7 +3783,7 @@ func TestTransportRemovesH2ConnsAfterIdle(t *testing.T) {
 	}
 }
 
-// This tests that an client requesting a content range won't also
+// This tests that a client requesting a content range won't also
 // implicitly ask for gzip support. If they want that, they need to do it
 // on their own.
 // golang.org/issue/8923
@@ -3994,6 +4145,7 @@ func TestTransportAutomaticHTTP2_DialTLS(t *testing.T) {
 }
 
 func testTransportAutoHTTP(t *testing.T, tr *Transport, wantH2 bool) {
+	CondSkipHTTP2(t)
 	_, err := tr.RoundTrip(new(Request))
 	if err == nil {
 		t.Error("expected error from RoundTrip")
@@ -5575,6 +5727,7 @@ func TestTransportClone(t *testing.T) {
 		DialContext:            func(ctx context.Context, network, addr string) (net.Conn, error) { panic("") },
 		Dial:                   func(network, addr string) (net.Conn, error) { panic("") },
 		DialTLS:                func(network, addr string) (net.Conn, error) { panic("") },
+		DialTLSContext:         func(ctx context.Context, network, addr string) (net.Conn, error) { panic("") },
 		TLSClientConfig:        new(tls.Config),
 		TLSHandshakeTimeout:    time.Second,
 		DisableKeepAlives:      true,
@@ -5843,7 +5996,11 @@ func TestDontCacheBrokenHTTP2Conn(t *testing.T) {
 
 	var brokenState brokenState
 
+	const numReqs = 5
+	var numDials, gotConns uint32 // atomic
+
 	cst.tr.Dial = func(netw, addr string) (net.Conn, error) {
+		atomic.AddUint32(&numDials, 1)
 		c, err := net.Dial(netw, addr)
 		if err != nil {
 			t.Errorf("unexpected Dial error: %v", err)
@@ -5852,8 +6009,6 @@ func TestDontCacheBrokenHTTP2Conn(t *testing.T) {
 		return &breakableConn{c, &brokenState}, err
 	}
 
-	const numReqs = 5
-	var gotConns uint32 // atomic
 	for i := 1; i <= numReqs; i++ {
 		brokenState.Lock()
 		brokenState.broken = false
@@ -5866,6 +6021,7 @@ func TestDontCacheBrokenHTTP2Conn(t *testing.T) {
 
 		ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{
 			GotConn: func(info httptrace.GotConnInfo) {
+				t.Logf("got conn: %v, reused=%v, wasIdle=%v, idleTime=%v", info.Conn.LocalAddr(), info.Reused, info.WasIdle, info.IdleTime)
 				atomic.AddUint32(&gotConns, 1)
 			},
 			TLSHandshakeDone: func(cfg tls.ConnectionState, err error) {
@@ -5888,6 +6044,9 @@ func TestDontCacheBrokenHTTP2Conn(t *testing.T) {
 	if got, want := atomic.LoadUint32(&gotConns), 1; int(got) != want {
 		t.Errorf("GotConn calls = %v; want %v", got, want)
 	}
+	if got, want := atomic.LoadUint32(&numDials), numReqs; int(got) != want {
+		t.Errorf("Dials = %v; want %v", got, want)
+	}
 }
 
 // Issue 34941
@@ -5896,6 +6055,7 @@ func TestDontCacheBrokenHTTP2Conn(t *testing.T) {
 // only be one decrement regardless of the number of failures.
 func TestTransportDecrementConnWhenIdleConnRemoved(t *testing.T) {
 	defer afterTest(t)
+	CondSkipHTTP2(t)
 
 	h := HandlerFunc(func(w ResponseWriter, r *Request) {
 		_, err := w.Write([]byte("foo"))

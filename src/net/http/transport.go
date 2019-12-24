@@ -89,7 +89,7 @@ const DefaultMaxIdleConnsPerHost = 2
 // Request.GetBody defined. HTTP requests are considered idempotent if
 // they have HTTP methods GET, HEAD, OPTIONS, or TRACE; or if their
 // Header map contains an "Idempotency-Key" or "X-Idempotency-Key"
-// entry. If the idempotency key value is an zero-length slice, the
+// entry. If the idempotency key value is a zero-length slice, the
 // request is treated as idempotent but the header is not sent on the
 // wire.
 type Transport struct {
@@ -142,15 +142,24 @@ type Transport struct {
 	// If both are set, DialContext takes priority.
 	Dial func(network, addr string) (net.Conn, error)
 
-	// DialTLS specifies an optional dial function for creating
+	// DialTLSContext specifies an optional dial function for creating
 	// TLS connections for non-proxied HTTPS requests.
 	//
-	// If DialTLS is nil, Dial and TLSClientConfig are used.
+	// If DialTLSContext is nil (and the deprecated DialTLS below is also nil),
+	// DialContext and TLSClientConfig are used.
 	//
-	// If DialTLS is set, the Dial hook is not used for HTTPS
+	// If DialTLSContext is set, the Dial and DialContext hooks are not used for HTTPS
 	// requests and the TLSClientConfig and TLSHandshakeTimeout
 	// are ignored. The returned net.Conn is assumed to already be
 	// past the TLS handshake.
+	DialTLSContext func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	// DialTLS specifies an optional dial function for creating
+	// TLS connections for non-proxied HTTPS requests.
+	//
+	// Deprecated: Use DialTLSContext instead, which allows the transport
+	// to cancel dials as soon as they are no longer needed.
+	// If both are set, DialTLSContext takes priority.
 	DialTLS func(network, addr string) (net.Conn, error)
 
 	// TLSClientConfig specifies the TLS configuration to use with
@@ -286,7 +295,7 @@ func (t *Transport) Clone() *Transport {
 		DialContext:            t.DialContext,
 		Dial:                   t.Dial,
 		DialTLS:                t.DialTLS,
-		TLSClientConfig:        t.TLSClientConfig.Clone(),
+		DialTLSContext:         t.DialTLSContext,
 		TLSHandshakeTimeout:    t.TLSHandshakeTimeout,
 		DisableKeepAlives:      t.DisableKeepAlives,
 		DisableCompression:     t.DisableCompression,
@@ -301,6 +310,9 @@ func (t *Transport) Clone() *Transport {
 		ForceAttemptHTTP2:      t.ForceAttemptHTTP2,
 		WriteBufferSize:        t.WriteBufferSize,
 		ReadBufferSize:         t.ReadBufferSize,
+	}
+	if t.TLSClientConfig != nil {
+		t2.TLSClientConfig = t.TLSClientConfig.Clone()
 	}
 	if !t.tlsNextProtoWasNil {
 		npm := map[string]func(authority string, c *tls.Conn) RoundTripper{}
@@ -320,6 +332,10 @@ func (t *Transport) Clone() *Transport {
 // namespace used by x/tools/cmd/bundle for h2_bundle.go.
 type h2Transport interface {
 	CloseIdleConnections()
+}
+
+func (t *Transport) hasCustomTLSDialer() bool {
+	return t.DialTLS != nil || t.DialTLSContext != nil
 }
 
 // onceSetNextProtoDefaults initializes TLSNextProto.
@@ -350,13 +366,16 @@ func (t *Transport) onceSetNextProtoDefaults() {
 		// Transport.
 		return
 	}
-	if !t.ForceAttemptHTTP2 && (t.TLSClientConfig != nil || t.Dial != nil || t.DialTLS != nil || t.DialContext != nil) {
+	if !t.ForceAttemptHTTP2 && (t.TLSClientConfig != nil || t.Dial != nil || t.DialContext != nil || t.hasCustomTLSDialer()) {
 		// Be conservative and don't automatically enable
 		// http2 if they've specified a custom TLS config or
 		// custom dialers. Let them opt-in themselves via
 		// http2.ConfigureTransport so we don't surprise them
 		// by modifying their tls.Config. Issue 14275.
 		// However, if ForceAttemptHTTP2 is true, it overrides the above checks.
+		return
+	}
+	if omitBundledHTTP2 {
 		return
 	}
 	t2, err := http2configureTransport(t)
@@ -910,16 +929,37 @@ func (t *Transport) queueForIdleConn(w *wantConn) (delivered bool) {
 		return false
 	}
 
+	// If IdleConnTimeout is set, calculate the oldest
+	// persistConn.idleAt time we're willing to use a cached idle
+	// conn.
+	var oldTime time.Time
+	if t.IdleConnTimeout > 0 {
+		oldTime = time.Now().Add(-t.IdleConnTimeout)
+	}
+
 	// Look for most recently-used idle connection.
 	if list, ok := t.idleConn[w.key]; ok {
 		stop := false
 		delivered := false
 		for len(list) > 0 && !stop {
 			pconn := list[len(list)-1]
-			if pconn.isBroken() {
-				// persistConn.readLoop has marked the connection broken,
-				// but Transport.removeIdleConn has not yet removed it from the idle list.
-				// Drop on floor on behalf of Transport.removeIdleConn.
+
+			// See whether this connection has been idle too long, considering
+			// only the wall time (the Round(0)), in case this is a laptop or VM
+			// coming out of suspend with previously cached idle connections.
+			tooOld := !oldTime.IsZero() && pconn.idleAt.Round(0).Before(oldTime)
+			if tooOld {
+				// Async cleanup. Launch in its own goroutine (as if a
+				// time.AfterFunc called it); it acquires idleMu, which we're
+				// holding, and does a synchronous net.Conn.Close.
+				go pconn.closeConnIfStillIdle()
+			}
+			if pconn.isBroken() || tooOld {
+				// If either persistConn.readLoop has marked the connection
+				// broken, but Transport.removeIdleConn has not yet removed it
+				// from the idle list, or if this persistConn is too old (it was
+				// idle too long), then ignore it and look for another. In both
+				// cases it's already in the process of being closed.
 				list = list[:len(list)-1]
 				continue
 			}
@@ -1180,6 +1220,18 @@ func (q *wantConnQueue) cleanFront() (cleaned bool) {
 	}
 }
 
+func (t *Transport) customDialTLS(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+	if t.DialTLSContext != nil {
+		conn, err = t.DialTLSContext(ctx, network, addr)
+	} else {
+		conn, err = t.DialTLS(network, addr)
+	}
+	if conn == nil && err == nil {
+		err = errors.New("net/http: Transport.DialTLS or DialTLSContext returned (nil, nil)")
+	}
+	return
+}
+
 // getConn dials and creates a new persistConn to the target as
 // specified in the connectMethod. This includes doing a proxy CONNECT
 // and/or setting up TLS.  If this doesn't return an error, the persistConn
@@ -1430,14 +1482,11 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 		}
 		return err
 	}
-	if cm.scheme() == "https" && t.DialTLS != nil {
+	if cm.scheme() == "https" && t.hasCustomTLSDialer() {
 		var err error
-		pconn.conn, err = t.DialTLS("tcp", cm.addr())
+		pconn.conn, err = t.customDialTLS(ctx, "tcp", cm.addr())
 		if err != nil {
 			return nil, wrapErr(err)
-		}
-		if pconn.conn == nil {
-			return nil, wrapErr(errors.New("net/http: Transport.DialTLS returned (nil, nil)"))
 		}
 		if tc, ok := pconn.conn.(*tls.Conn); ok {
 			// Handshake here, in case DialTLS didn't. TLSNextProto below
@@ -1519,13 +1568,44 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 		if pa := cm.proxyAuth(); pa != "" {
 			connectReq.Header.Set("Proxy-Authorization", pa)
 		}
-		connectReq.Write(conn)
 
-		// Read response.
-		// Okay to use and discard buffered reader here, because
-		// TLS server will not speak until spoken to.
-		br := bufio.NewReader(conn)
-		resp, err := ReadResponse(br, connectReq)
+		// If there's no done channel (no deadline or cancellation
+		// from the caller possible), at least set some (long)
+		// timeout here. This will make sure we don't block forever
+		// and leak a goroutine if the connection stops replying
+		// after the TCP connect.
+		connectCtx := ctx
+		if ctx.Done() == nil {
+			newCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+			defer cancel()
+			connectCtx = newCtx
+		}
+
+		didReadResponse := make(chan struct{}) // closed after CONNECT write+read is done or fails
+		var (
+			resp *Response
+			err  error // write or read error
+		)
+		// Write the CONNECT request & read the response.
+		go func() {
+			defer close(didReadResponse)
+			err = connectReq.Write(conn)
+			if err != nil {
+				return
+			}
+			// Okay to use and discard buffered reader here, because
+			// TLS server will not speak until spoken to.
+			br := bufio.NewReader(conn)
+			resp, err = ReadResponse(br, connectReq)
+		}()
+		select {
+		case <-connectCtx.Done():
+			conn.Close()
+			<-didReadResponse
+			return nil, connectCtx.Err()
+		case <-didReadResponse:
+			// resp or err now set
+		}
 		if err != nil {
 			conn.Close()
 			return nil, err

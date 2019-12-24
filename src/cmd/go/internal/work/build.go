@@ -97,10 +97,10 @@ and test commands:
 	-ldflags '[pattern=]arg list'
 		arguments to pass on each go tool link invocation.
 	-linkshared
-		link against shared libraries previously created with
-		-buildmode=shared.
+		build code that will be linked against shared libraries previously
+		created with -buildmode=shared.
 	-mod mode
-		module download mode to use: readonly or vendor.
+		module download mode to use: readonly, vendor, or mod.
 		See 'go help modules' for more.
 	-modcacherw
 		leave newly-created directories in the module cache read-write

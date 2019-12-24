@@ -22,16 +22,31 @@ func AsyncPreempt() {
 	debug.SetGCPercent(-1)
 
 	// Start a goroutine with no sync safe-points.
-	var ready uint32
+	var ready, ready2 uint32
 	go func() {
 		for {
 			atomic.StoreUint32(&ready, 1)
+			dummy()
+			dummy()
+		}
+	}()
+	// Also start one with a frameless function.
+	// This is an especially interesting case for
+	// LR machines.
+	go func() {
+		atomic.AddUint32(&ready2, 1)
+		frameless()
+	}()
+	// Also test empty infinite loop.
+	go func() {
+		atomic.AddUint32(&ready2, 1)
+		for {
 		}
 	}()
 
 	// Wait for the goroutine to stop passing through sync
 	// safe-points.
-	for atomic.LoadUint32(&ready) == 0 {
+	for atomic.LoadUint32(&ready) == 0 || atomic.LoadUint32(&ready2) < 2 {
 		runtime.Gosched()
 	}
 
@@ -42,3 +57,15 @@ func AsyncPreempt() {
 
 	println("OK")
 }
+
+//go:noinline
+func frameless() {
+	for i := int64(0); i < 1<<62; i++ {
+		out += i * i * i * i * i * 12345
+	}
+}
+
+var out int64
+
+//go:noinline
+func dummy() {}

@@ -17,11 +17,17 @@ func AtExit(f func()) {
 	atExitFuncs = append(atExitFuncs, f)
 }
 
-// Exit exits with code after executing all atExitFuncs.
-func Exit(code int) {
+// runAtExitFuncs runs the queued set of AtExit functions.
+func runAtExitFuncs() {
 	for i := len(atExitFuncs) - 1; i >= 0; i-- {
 		atExitFuncs[i]()
 	}
+	atExitFuncs = nil
+}
+
+// Exit exits with code after executing all atExitFuncs.
+func Exit(code int) {
+	runAtExitFuncs()
 	os.Exit(code)
 }
 
@@ -82,3 +88,10 @@ func contains(s []string, v string) bool {
 	}
 	return false
 }
+
+// implements sort.Interface, for sorting symbols by name.
+type byName []*sym.Symbol
+
+func (s byName) Len() int           { return len(s) }
+func (s byName) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s byName) Less(i, j int) bool { return s[i].Name < s[j].Name }

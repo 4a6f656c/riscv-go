@@ -145,10 +145,10 @@
 // 	-ldflags '[pattern=]arg list'
 // 		arguments to pass on each go tool link invocation.
 // 	-linkshared
-// 		link against shared libraries previously created with
-// 		-buildmode=shared.
+// 		build code that will be linked against shared libraries previously
+// 		created with -buildmode=shared.
 // 	-mod mode
-// 		module download mode to use: readonly or vendor.
+// 		module download mode to use: readonly, vendor, or mod.
 // 		See 'go help modules' for more.
 // 	-modcacherw
 // 		leave newly-created directories in the module cache read-write
@@ -907,7 +907,7 @@
 //         Main      bool         // is this the main module?
 //         Indirect  bool         // is this module only an indirect dependency of main module?
 //         Dir       string       // directory holding files for this module, if any
-//         GoMod     string       // path to go.mod file for this module, if any
+//         GoMod     string       // path to go.mod file used when loading this module, if any
 //         GoVersion string       // go version used in module
 //         Error     *ModuleError // error loading module
 //     }
@@ -915,6 +915,9 @@
 //     type ModuleError struct {
 //         Err string // the error itself
 //     }
+//
+// The file GoMod refers to may be outside the module directory if the
+// module is in the module cache or if the -modfile flag is used.
 //
 // The default output is to print the module path and then
 // information about the version and replacement if any.
@@ -1010,7 +1013,7 @@
 //
 // Usage:
 //
-// 	go mod download [-json] [modules]
+// 	go mod download [-x] [-json] [modules]
 //
 // Download downloads the named modules, which can be module patterns selecting
 // dependencies of the main module or module queries of the form path@version.
@@ -1036,6 +1039,8 @@
 //         Sum      string // checksum for path, version (as in go.sum)
 //         GoModSum string // checksum for go.mod (as in go.sum)
 //     }
+//
+// The -x flag causes download to print the commands download executes.
 //
 // See 'go help modules' for more about module queries.
 //
@@ -1073,12 +1078,17 @@
 // add and drop an exclusion for the given module path and version.
 // Note that -exclude=path@version is a no-op if that exclusion already exists.
 //
-// The -replace=old[@v]=new[@v] and -dropreplace=old[@v] flags
-// add and drop a replacement of the given module path and version pair.
-// If the @v in old@v is omitted, the replacement applies to all versions
-// with the old module path. If the @v in new@v is omitted, the new path
-// should be a local module root directory, not a module path.
-// Note that -replace overrides any existing replacements for old[@v].
+// The -replace=old[@v]=new[@v] flag adds a replacement of the given
+// module path and version pair. If the @v in old@v is omitted, a
+// replacement without a version on the left side is added, which applies
+// to all versions of the old module path. If the @v in new@v is omitted,
+// the new path should be a local module root directory, not a module
+// path. Note that -replace overrides any redundant replacements for old[@v],
+// so omitting @v will drop existing replacements for specific versions.
+//
+// The -dropreplace=old[@v] flag drops a replacement of the given
+// module path and version pair. If the @v is omitted, a replacement without
+// a version on the left side is dropped.
 //
 // The -require, -droprequire, -exclude, -dropexclude, -replace,
 // and -dropreplace editing flags may be repeated, and the changes
@@ -1604,6 +1614,10 @@
 // 		Because the entries are space-separated, flag values must
 // 		not contain spaces. Flags listed on the command line
 // 		are applied after this list and therefore override it.
+// 	GOINSECURE
+// 		Comma-separated list of glob patterns (in the syntax of Go's path.Match)
+// 		of module path prefixes that should always be fetched in an insecure
+// 		manner. Only applies to dependencies that are being fetched directly.
 // 	GOOS
 // 		The operating system for which to compile code.
 // 		Examples are linux, darwin, windows, netbsd.
@@ -1715,8 +1729,10 @@
 // 	GOHOSTOS
 // 		The operating system (GOOS) of the Go toolchain binaries.
 // 	GOMOD
-// 		The absolute path to the go.mod of the main module,
-// 		or the empty string if not using modules.
+// 		The absolute path to the go.mod of the main module.
+// 		If module-aware mode is enabled, but there is no go.mod, GOMOD will be
+// 		os.DevNull ("/dev/null" on Unix-like systems, "NUL" on Windows).
+// 		If module-aware mode is disabled, GOMOD will be the empty string.
 // 	GOTOOLDIR
 // 		The directory where the go tools (compile, cover, doc, etc...) are installed.
 //
@@ -2490,6 +2506,9 @@
 // If invoked with -mod=vendor, the go command assumes that the vendor
 // directory holds the correct copies of dependencies and ignores
 // the dependency descriptions in go.mod.
+//
+// If invoked with -mod=mod, the go command loads modules from the module cache
+// even if there is a vendor directory present.
 //
 // Pseudo-versions
 //

@@ -104,8 +104,6 @@ func buildTestProg(t *testing.T, binary string, flags ...string) (string, error)
 		t.Skip("-quick")
 	}
 
-	checkStaleRuntime(t)
-
 	testprog.Lock()
 	defer testprog.Unlock()
 	if testprog.dir == "" {
@@ -149,34 +147,6 @@ func TestVDSO(t *testing.T) {
 	want := "success\n"
 	if output != want {
 		t.Fatalf("output:\n%s\n\nwanted:\n%s", output, want)
-	}
-}
-
-var (
-	staleRuntimeOnce sync.Once // guards init of staleRuntimeErr
-	staleRuntimeErr  error
-)
-
-func checkStaleRuntime(t *testing.T) {
-	staleRuntimeOnce.Do(func() {
-		// 'go run' uses the installed copy of runtime.a, which may be out of date.
-		out, err := testenv.CleanCmdEnv(exec.Command(testenv.GoToolPath(t), "list", "-gcflags=all="+os.Getenv("GO_GCFLAGS"), "-f", "{{.Stale}}", "runtime")).CombinedOutput()
-		if err != nil {
-			staleRuntimeErr = fmt.Errorf("failed to execute 'go list': %v\n%v", err, string(out))
-			return
-		}
-		if string(out) != "false\n" {
-			t.Logf("go list -f {{.Stale}} runtime:\n%s", out)
-			out, err := testenv.CleanCmdEnv(exec.Command(testenv.GoToolPath(t), "list", "-gcflags=all="+os.Getenv("GO_GCFLAGS"), "-f", "{{.StaleReason}}", "runtime")).CombinedOutput()
-			if err != nil {
-				t.Logf("go list -f {{.StaleReason}} failed: %v", err)
-			}
-			t.Logf("go list -f {{.StaleReason}} runtime:\n%s", out)
-			staleRuntimeErr = fmt.Errorf("Stale runtime.a. Run 'go install runtime'.")
-		}
-	})
-	if staleRuntimeErr != nil {
-		t.Fatal(staleRuntimeErr)
 	}
 }
 
@@ -234,9 +204,23 @@ func TestGoexitDeadlock(t *testing.T) {
 
 func TestStackOverflow(t *testing.T) {
 	output := runTestProg(t, "testprog", "StackOverflow")
-	want := "runtime: goroutine stack exceeds 1474560-byte limit\nfatal error: stack overflow"
-	if !strings.HasPrefix(output, want) {
-		t.Fatalf("output does not start with %q:\n%s", want, output)
+	want := []string{
+		"runtime: goroutine stack exceeds 1474560-byte limit\n",
+		"fatal error: stack overflow",
+		// information about the current SP and stack bounds
+		"runtime: sp=",
+		"stack=[",
+	}
+	if !strings.HasPrefix(output, want[0]) {
+		t.Errorf("output does not start with %q", want[0])
+	}
+	for _, s := range want[1:] {
+		if !strings.Contains(output, s) {
+			t.Errorf("output does not contain %q", s)
+		}
+	}
+	if t.Failed() {
+		t.Logf("output:\n%s", output)
 	}
 }
 
@@ -277,6 +261,17 @@ func TestRecursivePanic3(t *testing.T) {
 	output := runTestProg(t, "testprog", "RecursivePanic3")
 	want := `panic: first panic
 
+`
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
+	}
+
+}
+
+func TestRecursivePanic4(t *testing.T) {
+	output := runTestProg(t, "testprog", "RecursivePanic4")
+	want := `panic: first panic [recovered]
+	panic: second panic
 `
 	if !strings.HasPrefix(output, want) {
 		t.Fatalf("output does not start with %q:\n%s", want, output)
@@ -415,23 +410,21 @@ func TestRecoveredPanicAfterGoexit(t *testing.T) {
 }
 
 func TestRecoverBeforePanicAfterGoexit(t *testing.T) {
-	// 1. defer a function that recovers
-	// 2. defer a function that panics
-	// 3. call goexit
-	// Goexit should run the #2 defer. Its panic
-	// should be caught by the #1 defer, and execution
-	// should resume in the caller. Like the Goexit
-	// never happened!
-	defer func() {
-		r := recover()
-		if r == nil {
-			panic("bad recover")
-		}
-	}()
-	defer func() {
-		panic("hello")
-	}()
-	runtime.Goexit()
+	t.Parallel()
+	output := runTestProg(t, "testprog", "RecoverBeforePanicAfterGoexit")
+	want := "fatal error: no goroutines (main called runtime.Goexit) - deadlock!"
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
+	}
+}
+
+func TestRecoverBeforePanicAfterGoexit2(t *testing.T) {
+	t.Parallel()
+	output := runTestProg(t, "testprog", "RecoverBeforePanicAfterGoexit2")
+	want := "fatal error: no goroutines (main called runtime.Goexit) - deadlock!"
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
+	}
 }
 
 func TestNetpollDeadlock(t *testing.T) {

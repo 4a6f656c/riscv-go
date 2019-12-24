@@ -2088,6 +2088,7 @@ const (
 	OpS390XRLL
 	OpS390XRLLGconst
 	OpS390XRLLconst
+	OpS390XRXSBG
 	OpS390XNEG
 	OpS390XNEGW
 	OpS390XNOT
@@ -2187,6 +2188,8 @@ const (
 	OpS390XLAAG
 	OpS390XAddTupleFirst32
 	OpS390XAddTupleFirst64
+	OpS390XLAOfloor
+	OpS390XLANfloor
 	OpS390XLoweredAtomicCas32
 	OpS390XLoweredAtomicCas64
 	OpS390XLoweredAtomicExchange32
@@ -2534,7 +2537,7 @@ const (
 	OpRoundToEven
 	OpAbs
 	OpCopysign
-	OpFma
+	OpFMA
 	OpPhi
 	OpCopy
 	OpConvert
@@ -19054,6 +19057,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 805044223},           // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R19 R20 R21 R22 R23 R24 R25 R26 g R30
@@ -19070,6 +19074,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 805044223},           // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R19 R20 R21 R22 R23 R24 R25 R26 g R30
@@ -19086,6 +19091,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 805044223},           // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R19 R20 R21 R22 R23 R24 R25 R26 g R30
@@ -19102,6 +19108,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 805044223},           // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R19 R20 R21 R22 R23 R24 R25 R26 g R30
@@ -19151,6 +19158,7 @@ var opcodeTable = [...]opInfo{
 		clobberFlags:    true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 805044223},           // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R19 R20 R21 R22 R23 R24 R25 R26 g R30
@@ -19169,6 +19177,7 @@ var opcodeTable = [...]opInfo{
 		clobberFlags:    true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 805044223},           // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R19 R20 R21 R22 R23 R24 R25 R26 g R30
@@ -19186,6 +19195,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		asm:             arm64.AAND,
 		reg: regInfo{
 			inputs: []inputInfo{
@@ -19203,6 +19213,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		asm:             arm64.AORR,
 		reg: regInfo{
 			inputs: []inputInfo{
@@ -20490,6 +20501,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 469762046},       // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 R28 g R31
@@ -20506,6 +20518,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 469762046},       // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 R28 g R31
@@ -20523,6 +20536,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 140738025226238}, // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 R28 SP g R31 SB
@@ -20538,6 +20552,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 469762046},       // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 R28 g R31
@@ -20554,6 +20569,7 @@ var opcodeTable = [...]opInfo{
 		argLen:         3,
 		faultOnNilArg0: true,
 		hasSideEffects: true,
+		unsafePoint:    true,
 		asm:            mips.AAND,
 		reg: regInfo{
 			inputs: []inputInfo{
@@ -20567,6 +20583,7 @@ var opcodeTable = [...]opInfo{
 		argLen:         3,
 		faultOnNilArg0: true,
 		hasSideEffects: true,
+		unsafePoint:    true,
 		asm:            mips.AOR,
 		reg: regInfo{
 			inputs: []inputInfo{
@@ -22117,6 +22134,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 234881022},           // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 g R31
@@ -22133,6 +22151,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 234881022},           // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 g R31
@@ -22149,6 +22168,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 234881022},           // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 g R31
@@ -22165,6 +22185,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 234881022},           // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 g R31
@@ -22182,6 +22203,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 4611686018695823358}, // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 SP g R31 SB
@@ -22198,6 +22220,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 4611686018695823358}, // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 SP g R31 SB
@@ -22213,6 +22236,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 234881022},           // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 g R31
@@ -22230,6 +22254,7 @@ var opcodeTable = [...]opInfo{
 		resultNotInArgs: true,
 		faultOnNilArg0:  true,
 		hasSideEffects:  true,
+		unsafePoint:     true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{1, 234881022},           // R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R24 R25 g R31
@@ -24650,6 +24675,7 @@ var opcodeTable = [...]opInfo{
 		argLen:         2,
 		clobberFlags:   true,
 		faultOnNilArg0: true,
+		unsafePoint:    true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 8}, // R3
@@ -24664,6 +24690,7 @@ var opcodeTable = [...]opInfo{
 		clobberFlags:   true,
 		faultOnNilArg0: true,
 		faultOnNilArg1: true,
+		unsafePoint:    true,
 		reg: regInfo{
 			inputs: []inputInfo{
 				{0, 8},  // R3
@@ -27935,6 +27962,23 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
+		name:         "RXSBG",
+		auxType:      auxArchSpecific,
+		argLen:       2,
+		resultInArg0: true,
+		clobberFlags: true,
+		asm:          s390x.ARXSBG,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 23551}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R11 R12 R14
+				{1, 23551}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R11 R12 R14
+			},
+			outputs: []outputInfo{
+				{0, 23551}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R11 R12 R14
+			},
+		},
+	},
+	{
 		name:         "NEG",
 		argLen:       1,
 		clobberFlags: true,
@@ -29274,6 +29318,34 @@ var opcodeTable = [...]opInfo{
 		name:   "AddTupleFirst64",
 		argLen: 2,
 		reg:    regInfo{},
+	},
+	{
+		name:           "LAOfloor",
+		argLen:         3,
+		clobberFlags:   true,
+		hasSideEffects: true,
+		asm:            s390x.ALAO,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 2},     // R1
+				{1, 56319}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R11 R12 R14 SP
+			},
+			clobbers: 2, // R1
+		},
+	},
+	{
+		name:           "LANfloor",
+		argLen:         3,
+		clobberFlags:   true,
+		hasSideEffects: true,
+		asm:            s390x.ALAN,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 2},     // R1
+				{1, 56319}, // R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R11 R12 R14 SP
+			},
+			clobbers: 2, // R1
+		},
 	},
 	{
 		name:           "LoweredAtomicCas32",
@@ -32192,7 +32264,7 @@ var opcodeTable = [...]opInfo{
 		generic: true,
 	},
 	{
-		name:    "Fma",
+		name:    "FMA",
 		argLen:  3,
 		generic: true,
 	},
@@ -33021,6 +33093,8 @@ func (o Op) String() string       { return opcodeTable[o].name }
 func (o Op) UsesScratch() bool    { return opcodeTable[o].usesScratch }
 func (o Op) SymEffect() SymEffect { return opcodeTable[o].symEffect }
 func (o Op) IsCall() bool         { return opcodeTable[o].call }
+func (o Op) HasSideEffects() bool { return opcodeTable[o].hasSideEffects }
+func (o Op) UnsafePoint() bool    { return opcodeTable[o].unsafePoint }
 
 var registers386 = [...]Register{
 	{0, x86.REG_AX, 0, "AX"},

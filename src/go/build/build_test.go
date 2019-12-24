@@ -328,7 +328,7 @@ func TestImportDirNotExist(t *testing.T) {
 	defer os.RemoveAll(emptyDir)
 
 	ctxt.GOPATH = emptyDir
-	ctxt.WorkingDir = emptyDir
+	ctxt.Dir = emptyDir
 
 	tests := []struct {
 		label        string
@@ -459,7 +459,7 @@ func TestImportPackageOutsideModule(t *testing.T) {
 	os.Setenv("GOPATH", gopath)
 	ctxt := Default
 	ctxt.GOPATH = gopath
-	ctxt.WorkingDir = filepath.Join(gopath, "src/example.com/p")
+	ctxt.Dir = filepath.Join(gopath, "src/example.com/p")
 
 	want := "cannot find module providing package"
 	if _, err := ctxt.Import("example.com/p", gopath, FindOnly); err == nil {
@@ -515,14 +515,38 @@ func TestMissingImportErrorRepetition(t *testing.T) {
 	os.Setenv("GO111MODULE", "on")
 	defer os.Setenv("GOPROXY", os.Getenv("GOPROXY"))
 	os.Setenv("GOPROXY", "off")
+	defer os.Setenv("GONOPROXY", os.Getenv("GONOPROXY"))
+	os.Setenv("GONOPROXY", "none")
 
 	ctxt := Default
-	ctxt.WorkingDir = tmp
+	ctxt.Dir = tmp
 
 	pkgPath := "example.com/hello"
-	if _, err = ctxt.Import(pkgPath, tmp, FindOnly); err == nil {
+	_, err = ctxt.Import(pkgPath, tmp, FindOnly)
+	if err == nil {
 		t.Fatal("unexpected success")
-	} else if n := strings.Count(err.Error(), pkgPath); n != 1 {
+	}
+	// Don't count the package path with a URL like https://...?go-get=1.
+	// See golang.org/issue/35986.
+	errStr := strings.ReplaceAll(err.Error(), "://"+pkgPath+"?go-get=1", "://...?go-get=1")
+	if n := strings.Count(errStr, pkgPath); n != 1 {
 		t.Fatalf("package path %q appears in error %d times; should appear once\nerror: %v", pkgPath, n, err)
+	}
+}
+
+// TestCgoImportsIgnored checks that imports in cgo files are not included
+// in the imports list when cgo is disabled.
+// Verifies golang.org/issue/35946.
+func TestCgoImportsIgnored(t *testing.T) {
+	ctxt := Default
+	ctxt.CgoEnabled = false
+	p, err := ctxt.ImportDir("testdata/cgo_disabled", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range p.Imports {
+		if path == "should/be/ignored" {
+			t.Errorf("found import %q in ignored cgo file", path)
+		}
 	}
 }

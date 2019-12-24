@@ -2920,16 +2920,17 @@ func (srv *Server) Serve(l net.Listener) error {
 			}
 			return err
 		}
+		connCtx := ctx
 		if cc := srv.ConnContext; cc != nil {
-			ctx = cc(ctx, rw)
-			if ctx == nil {
+			connCtx = cc(connCtx, rw)
+			if connCtx == nil {
 				panic("ConnContext returned nil")
 			}
 		}
 		tempDelay = 0
 		c := srv.newConn(rw)
 		c.setState(c.rwc, StateNew) // before Serve can return
-		go c.serve(ctx)
+		go c.serve(connCtx)
 	}
 }
 
@@ -3160,7 +3161,7 @@ func (srv *Server) onceSetNextProtoDefaults_Serve() {
 // configured otherwise. (by setting srv.TLSNextProto non-nil)
 // It must only be called via srv.nextProtoOnce (use srv.setupHTTP2_*).
 func (srv *Server) onceSetNextProtoDefaults() {
-	if strings.Contains(os.Getenv("GODEBUG"), "http2server=0") {
+	if omitBundledHTTP2 || strings.Contains(os.Getenv("GODEBUG"), "http2server=0") {
 		return
 	}
 	// Enable HTTP/2 by default if the user hasn't otherwise

@@ -522,8 +522,7 @@ type m struct {
 	waittraceskip int
 	startingtrace bool
 	syscalltick   uint32
-	thread        uintptr // thread handle
-	freelink      *m      // on sched.freem
+	freelink      *m // on sched.freem
 
 	// these are here because they are too large to be on the stack
 	// of low-level NOSPLIT functions.
@@ -555,6 +554,7 @@ type p struct {
 	sysmontick  sysmontick // last tick observed by sysmon
 	m           muintptr   // back-link to associated m (nil if idle)
 	mcache      *mcache
+	pcache      pageCache
 	raceprocctx uintptr
 
 	deferpool    [5][]*_defer // pool of available defer structs of different sizes (see panic.go)
@@ -587,6 +587,17 @@ type p struct {
 
 	sudogcache []*sudog
 	sudogbuf   [128]*sudog
+
+	// Cache of mspan objects from the heap.
+	mspancache struct {
+		// We need an explicit length here because this field is used
+		// in allocation codepaths where write barriers are not allowed,
+		// and eliminating the write barrier/keeping it eliminated from
+		// slice updates is tricky, moreso than just managing the length
+		// ourselves.
+		len int
+		buf [128]*mspan
+	}
 
 	tracebuf traceBufPtr
 
@@ -872,8 +883,11 @@ type _panic struct {
 	argp      unsafe.Pointer // pointer to arguments of deferred call run during panic; cannot move - known to liblink
 	arg       interface{}    // argument to panic
 	link      *_panic        // link to earlier panic
+	pc        uintptr        // where to return to in runtime if this panic is bypassed
+	sp        unsafe.Pointer // where to return to in runtime if this panic is bypassed
 	recovered bool           // whether this panic is over
 	aborted   bool           // the panic was aborted
+	goexit    bool
 }
 
 // stack traces
