@@ -77,3 +77,19 @@ func (c *sigctxt) preparePanic(sig uint32, gp *g) {
 	c.set_gp(uint64(uintptr(unsafe.Pointer(gp))))
 	c.set_pc(uint64(funcPC(sigpanic)))
 }
+
+const pushCallSupported = true
+
+func (c *sigctxt) pushCall(targetPC uintptr) {
+	// Push the RA to stack, as we'll clobber it in order to
+	// push the call. The function being pushed is responsible
+	// for restoring the RA and setting the SP back.
+	// This extra slot is known to gentraceback.
+	sp := c.sp() - 8
+	c.set_sp(sp)
+	*(*uint64)(unsafe.Pointer(uintptr(sp))) = c.ra()
+	// Set up PC and RA to pretend the function being signaled
+	// calls targetPC at the faulting PC.
+	c.set_ra(c.pc())
+	c.set_pc(uint64(targetPC))
+}

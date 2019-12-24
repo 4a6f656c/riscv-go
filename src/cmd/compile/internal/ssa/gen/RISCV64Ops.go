@@ -29,8 +29,8 @@ func init() {
 
 	// General purpose registers.
 	for r := riscv.REG_X0; r <= riscv.REG_X31; r++ {
-		if r == riscv.REG_RA {
-			// RA is not used by regalloc, so we skip it to leave
+		if r == riscv.REG_LR {
+			// LR is not used by regalloc, so we skip it to leave
 			// room for pseudo-register SB.
 			continue
 		}
@@ -66,7 +66,7 @@ func init() {
 		panic("Too many RISCV64 registers")
 	}
 
-	regCtxt := regNamed["CTXT"]
+	regCtxt := regNamed["X20"]
 	callerSave := gpMask | fpMask | regNamed["g"]
 
 	var (
@@ -110,7 +110,7 @@ func init() {
 		{name: "REMW", argLength: 2, reg: gp21, asm: "REMW", typ: "Int32"},
 		{name: "REMUW", argLength: 2, reg: gp21, asm: "REMUW", typ: "UInt32"},
 
-		{name: "MOVaddr", argLength: 1, reg: gp11sb, asm: "MOV", aux: "SymOff", rematerializeable: true, symEffect: "RdWr" /* XXX */}, // arg0 + auxint + offset encoded in aux
+		{name: "MOVaddr", argLength: 1, reg: gp11sb, asm: "MOV", aux: "SymOff", rematerializeable: true, symEffect: "RdWr"}, // arg0 + auxint + offset encoded in aux
 		// auxint+aux == add auxint and the offset of the symbol in aux (if any) to the effective address
 
 		{name: "MOVBconst", reg: gp01, asm: "MOV", typ: "UInt8", aux: "Int8", rematerializeable: true},    // 8 low bits of auxint
@@ -172,46 +172,46 @@ func init() {
 		// Generic moves and zeros
 
 		// general unaligned zeroing
-		// arg0 = address of memory to zero (in T0, changed as side effect)
+		// arg0 = address of memory to zero (in X5, changed as side effect)
 		// arg1 = address of the last element to zero
 		// arg2 = mem
 		// auxint = alignment
 		// returns mem
-		//	mov	ZERO, (T0)
-		//	ADD	$sz, T0
-		//	BNE	Rarg1, T0, -2(PC)
+		//	mov	ZERO, (X5)
+		//	ADD	$sz, X5
+		//	BNE	Rarg1, X5, -2(PC)
 		{
 			name:      "LoweredZero",
 			aux:       "Int64",
 			argLength: 3,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["T0"], gpMask},
-				clobbers: regNamed["T0"],
+				inputs:   []regMask{regNamed["X5"], gpMask},
+				clobbers: regNamed["X5"],
 			},
 			typ:            "Mem",
 			faultOnNilArg0: true,
 		},
 
 		// general unaligned move
-		// arg0 = address of dst memory (in T0, changed as side effect)
-		// arg1 = address of src memory (in T1, changed as side effect)
-		// arg2 = address of the last element of src (can't be T2 as we clobber it before using arg2)
+		// arg0 = address of dst memory (in X5, changed as side effect)
+		// arg1 = address of src memory (in X6, changed as side effect)
+		// arg2 = address of the last element of src (can't be X7 as we clobber it before using arg2)
 		// arg3 = mem
 		// auxint = alignment
-		// clobbers T2 as a tmp register.
+		// clobbers X7 as a tmp register.
 		// returns mem
-		//	mov	(T1), T2
-		//	mov	T2, (T0)
-		//	ADD	$sz, T0
-		//	ADD	$sz, T1
-		//	BNE	Rarg2, T0, -4(PC)
+		//	mov	(X6), X7
+		//	mov	X7, (X5)
+		//	ADD	$sz, X5
+		//	ADD	$sz, X6
+		//	BNE	Rarg2, X5, -4(PC)
 		{
 			name:      "LoweredMove",
 			aux:       "Int64",
 			argLength: 4,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["T0"], regNamed["T1"], gpMask &^ regNamed["T2"]},
-				clobbers: regNamed["T0"] | regNamed["T1"] | regNamed["T2"],
+				inputs:   []regMask{regNamed["X5"], regNamed["X6"], gpMask &^ regNamed["X7"]},
+				clobbers: regNamed["X5"] | regNamed["X6"] | regNamed["X7"],
 			},
 			typ:            "Mem",
 			faultOnNilArg0: true,
@@ -235,14 +235,14 @@ func init() {
 		// It saves all GP registers if necessary,
 		// but clobbers RA (LR) because it's a call
 		// and T6 (REG_TMP).
-		{name: "LoweredWB", argLength: 3, reg: regInfo{inputs: []regMask{regNamed["T0"], regNamed["T1"]}, clobbers: (callerSave &^ (gpMask | regNamed["g"])) | regNamed["RA"]}, clobberFlags: true, aux: "Sym", symEffect: "None"},
+		{name: "LoweredWB", argLength: 3, reg: regInfo{inputs: []regMask{regNamed["X5"], regNamed["X6"]}, clobbers: (callerSave &^ (gpMask | regNamed["g"])) | regNamed["X1"]}, clobberFlags: true, aux: "Sym", symEffect: "None"},
 
 		// There are three of these functions so that they can have three different register inputs.
 		// When we check 0 <= c <= cap (A), then 0 <= b <= c (B), then 0 <= a <= b (C), we want the
 		// default registers to match so we don't need to copy registers around unnecessarily.
-		{name: "LoweredPanicBoundsA", argLength: 3, aux: "Int64", reg: regInfo{inputs: []regMask{regNamed["T2"], regNamed["T3"]}}, typ: "Mem"}, // arg0=idx, arg1=len, arg2=mem, returns memory. AuxInt contains report code (see PanicBounds in genericOps.go).
-		{name: "LoweredPanicBoundsB", argLength: 3, aux: "Int64", reg: regInfo{inputs: []regMask{regNamed["T1"], regNamed["T2"]}}, typ: "Mem"}, // arg0=idx, arg1=len, arg2=mem, returns memory. AuxInt contains report code (see PanicBounds in genericOps.go).
-		{name: "LoweredPanicBoundsC", argLength: 3, aux: "Int64", reg: regInfo{inputs: []regMask{regNamed["T0"], regNamed["T1"]}}, typ: "Mem"}, // arg0=idx, arg1=len, arg2=mem, returns memory. AuxInt contains report code (see PanicBounds in genericOps.go).
+		{name: "LoweredPanicBoundsA", argLength: 3, aux: "Int64", reg: regInfo{inputs: []regMask{regNamed["X7"], regNamed["X28"]}}, typ: "Mem"}, // arg0=idx, arg1=len, arg2=mem, returns memory. AuxInt contains report code (see PanicBounds in genericOps.go).
+		{name: "LoweredPanicBoundsB", argLength: 3, aux: "Int64", reg: regInfo{inputs: []regMask{regNamed["X6"], regNamed["X7"]}}, typ: "Mem"}, // arg0=idx, arg1=len, arg2=mem, returns memory. AuxInt contains report code (see PanicBounds in genericOps.go).
+		{name: "LoweredPanicBoundsC", argLength: 3, aux: "Int64", reg: regInfo{inputs: []regMask{regNamed["X5"], regNamed["X6"]}}, typ: "Mem"}, // arg0=idx, arg1=len, arg2=mem, returns memory. AuxInt contains report code (see PanicBounds in genericOps.go).
 
 		// F extension.
 		{name: "FADDS", argLength: 2, reg: fp21, asm: "FADDS", commutative: true, typ: "Float32"},                        // arg0 + arg1

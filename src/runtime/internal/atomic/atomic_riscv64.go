@@ -28,6 +28,9 @@ func Xchguintptr(ptr *uintptr, new uintptr) uintptr
 func Load(ptr *uint32) uint32
 
 //go:noescape
+func Load8(ptr *uint8) uint8
+
+//go:noescape
 func Load64(ptr *uint64) uint64
 
 // NO go:noescape annotation; *ptr escapes if result escapes (#31525)
@@ -50,6 +53,9 @@ func CasRel(ptr *uint32, old, new uint32) bool
 
 //go:noescape
 func Store(ptr *uint32, val uint32)
+
+//go:noescape
+func Store8(ptr *uint8, val uint8)
 
 //go:noescape
 func Store64(ptr *uint64, val uint64)

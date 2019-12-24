@@ -42,6 +42,7 @@ const (
 	SYS_UNLINKAT               = 35
 	SYS_SYMLINKAT              = 36
 	SYS_LINKAT                 = 37
+	SYS_RENAMEAT               = 38
 	SYS_UMOUNT2                = 39
 	SYS_MOUNT                  = 40
 	SYS_PIVOT_ROOT             = 41
