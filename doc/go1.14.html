@@ -258,6 +258,23 @@ TODO
   <code>plan9/*</code>.
 </p>
 
+<p>
+  A consequence of the implementation of preemption is that on Unix
+  systems, including Linux and macOS systems, programs built with Go
+  1.14 will receive more signals than programs built with earlier
+  releases.
+  This means that programs that use packages
+  like <a href="/pkg/syscall/"><code>syscall</code></a>
+  or <a href="https://godoc.org/golang.org/x/sys/unix"><code>golang.org/x/sys/unix</code></a>
+  will see more slow system calls fail with <code>EINTR</code> errors.
+  Those programs will have to handle those errors in some way, most
+  likely looping to try the system call again.  For more
+  information about this
+  see <a href="http://man7.org/linux/man-pages/man7/signal.7.html"><code>man
+  7 signal</code></a> for Linux systems or similar documentation for
+  other systems.
+</p>
+
 <p><!-- CL 201765, CL 195701 and many others -->
   The page allocator is more efficient and incurs significantly less
   lock contention at high values of <code>GOMAXPROCS</code>.
@@ -334,13 +351,13 @@ TODO
 TODO
 </p>
 
-<dl id="bytes/hash"><dt><a href="/pkg/bytes/hash/">bytes/hash</a></dt>
+<dl id="hash/maphash"><dt><a href="/pkg/hash/maphash">hash/maphash</a></dt>
   <dd>
     <p><!-- CL 186877 -->
       TODO: <a href="https://golang.org/cl/186877">https://golang.org/cl/186877</a>: add hashing package for bytes and strings
     </p>
 
-</dl><!-- bytes/hash -->
+</dl><!-- hash/maphash -->
 
 <dl id="crypto/tls"><dt><a href="/pkg/crypto/tls/">crypto/tls</a></dt>
   <dd>
@@ -439,6 +456,18 @@ TODO
     </p>
 
 </dl><!-- signal -->
+
+<dl id="sync"><dt><a href="/pkg/sync/">sync</a></dt>
+  <dd>
+    <p><!-- CL 200577 -->
+      Unlocking a highly contended <code>Mutex</code> now directly
+      yields the CPU to the next goroutine waiting for
+      that <code>Mutex</code>. This significantly improves the
+      performance of highly contended mutexes on high CPU count
+      machines.
+    </p>
+
+</dl><!-- sync -->
 
 <dl id="testing"><dt><a href="/pkg/testing/">testing</a></dt>
   <dd>
