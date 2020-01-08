@@ -56,10 +56,6 @@
 (Hmul64u x y) -> (MULHU x y)
 (Hmul32 x y)  -> (SRAI [32] (MUL  (SignExt32to64 x) (SignExt32to64 y)))
 (Hmul32u x y) -> (SRLI [32] (MUL  (ZeroExt32to64 x) (ZeroExt32to64 y)))
-//(Hmul16 x y)  -> (SRAI [16] (MULW (SignExt16to32 x) (SignExt16to32 y)))
-//(Hmul16u x y) -> (SRLI [16] (MULW (ZeroExt16to32 x) (ZeroExt16to32 y)))
-//(Hmul8 x y)   -> (SRAI [8]  (MULW (SignExt8to32 x)  (SignExt8to32 y)))
-//(Hmul8u x y)  -> (SRLI [8]  (MULW (ZeroExt8to32 x)  (ZeroExt8to32 y)))
 
 // (x + y) / 2 -> (x / 2) + (y / 2) + (x & y & 1)
 (Avg64u <t> x y) -> (ADD (ADD <t> (SRLI <t> [1] x) (SRLI <t> [1] y)) (ANDI <t> [1] (AND <t> x y)))
@@ -469,8 +465,8 @@
 //
 // TODO(prattmic): RISCV branch instructions take two operands to compare,
 // so we could generate more efficient code by computing the condition in the
-// branch itself. Unfortunately, the compiler doesn't current support Blocks
-// with two control values. Revisit adding support for two control values.
+// branch itself. This should be revisited now that the compiler has support
+// for two control values (https://golang.org/cl/196557).
 (If cond yes no) -> (BNE cond yes no)
 
 // Calls

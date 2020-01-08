@@ -78,7 +78,7 @@ func (c *sigctxt) preparePanic(sig uint32, gp *g) {
 	c.set_pc(uint64(funcPC(sigpanic)))
 }
 
-const pushCallSupported = true
+const pushCallSupported = false
 
 func (c *sigctxt) pushCall(targetPC uintptr) {
 	// Push the RA to stack, as we'll clobber it in order to
