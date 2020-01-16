@@ -1041,56 +1041,6 @@ func TestInternalCache(t *testing.T) {
 	tg.grepStderr("internal", "did not fail to build p")
 }
 
-func TestImportCommandMatch(t *testing.T) {
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/importcom"))
-	tg.run("build", "./testdata/importcom/works.go")
-}
-
-func TestImportCommentMismatch(t *testing.T) {
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/importcom"))
-	tg.runFail("build", "./testdata/importcom/wrongplace.go")
-	tg.grepStderr(`wrongplace expects import "my/x"`, "go build did not mention incorrect import")
-}
-
-func TestImportCommentSyntaxError(t *testing.T) {
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/importcom"))
-	tg.runFail("build", "./testdata/importcom/bad.go")
-	tg.grepStderr("cannot parse import comment", "go build did not mention syntax error")
-}
-
-func TestImportCommentConflict(t *testing.T) {
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/importcom"))
-	tg.runFail("build", "./testdata/importcom/conflict.go")
-	tg.grepStderr("found import comments", "go build did not mention comment conflict")
-}
-
-func TestImportCycle(t *testing.T) {
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.parallel()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/importcycle"))
-	tg.runFail("build", "selfimport")
-
-	count := tg.grepCountBoth("import cycle not allowed")
-	if count == 0 {
-		t.Fatal("go build did not mention cyclical import")
-	}
-	if count > 1 {
-		t.Fatal("go build mentioned import cycle more than once")
-	}
-
-	// Don't hang forever.
-	tg.run("list", "-e", "-json", "selfimport")
-}
-
 // cmd/go: custom import path checking should not apply to Go packages without import comment.
 func TestIssue10952(t *testing.T) {
 	testenv.MustHaveExternalNetwork(t)
@@ -2144,17 +2094,6 @@ func TestCoverageNoStatements(t *testing.T) {
 	tg.grepStdout("[no statements]", "expected [no statements] for pkg4")
 }
 
-func TestCoverageImportMainLoop(t *testing.T) {
-	skipIfGccgo(t, "gccgo has no cover tool")
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.runFail("test", "importmain/test")
-	tg.grepStderr("not an importable package", "did not detect import main")
-	tg.runFail("test", "-cover", "importmain/test")
-	tg.grepStderr("not an importable package", "did not detect import main")
-}
-
 func TestCoverageErrorLine(t *testing.T) {
 	skipIfGccgo(t, "gccgo has no cover tool")
 	tooSlow(t)
@@ -2585,29 +2524,6 @@ func TestGoTestMainAsNormalTest(t *testing.T) {
 	defer tg.cleanup()
 	tg.run("test", "testdata/standalone_main_normal_test.go")
 	tg.grepBoth(okPattern, "go test did not say ok")
-}
-
-func TestGoTestMainTwice(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping in short mode")
-	}
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.makeTempdir()
-	tg.setenv("GOCACHE", tg.tempdir)
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.run("test", "-v", "multimain")
-	if strings.Count(tg.getStdout(), "notwithstanding") != 2 {
-		t.Fatal("tests did not run twice")
-	}
-}
-
-func TestGoTestFlagsAfterPackage(t *testing.T) {
-	tooSlow(t)
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.run("test", "testdata/flag_test.go", "-v", "-args", "-v=7") // Two distinct -v flags.
-	tg.run("test", "-v", "testdata/flag_test.go", "-args", "-v=7") // Two distinct -v flags.
 }
 
 func TestGoTestXtestonlyWorks(t *testing.T) {
@@ -3124,29 +3040,6 @@ func TestGoTestRaceInstallCgo(t *testing.T) {
 	if !new.ModTime().Equal(old.ModTime()) {
 		t.Fatalf("go test -i runtime/race reinstalled cmd/cgo")
 	}
-}
-
-func TestGoTestRaceFailures(t *testing.T) {
-	tooSlow(t)
-
-	if !canRace {
-		t.Skip("skipping because race detector not supported")
-	}
-
-	tg := testgo(t)
-	tg.parallel()
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-
-	tg.run("test", "testrace")
-
-	tg.runFail("test", "-race", "testrace")
-	tg.grepStdout("FAIL: TestRace", "TestRace did not fail")
-	tg.grepBothNot("PASS", "something passed")
-
-	tg.runFail("test", "-race", "testrace", "-run", "XXX", "-bench", ".")
-	tg.grepStdout("FAIL: BenchmarkRace", "BenchmarkRace did not fail")
-	tg.grepBothNot("PASS", "something passed")
 }
 
 func TestGoGetUpdate(t *testing.T) {
@@ -4062,25 +3955,6 @@ func TestCgoFlagContainsSpace(t *testing.T) {
 	tg.grepStderrNot(`"-L[^"]+c flags".*"-L[^"]+c flags"`, "found too many quoted ld flags")
 }
 
-// Issue #20435.
-func TestGoTestRaceCoverModeFailures(t *testing.T) {
-	tooSlow(t)
-	if !canRace {
-		t.Skip("skipping because race detector not supported")
-	}
-
-	tg := testgo(t)
-	tg.parallel()
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-
-	tg.run("test", "testrace")
-
-	tg.runFail("test", "-race", "-covermode=set", "testrace")
-	tg.grepStderr(`-covermode must be "atomic", not "set", when -race is enabled`, "-race -covermode=set was allowed")
-	tg.grepBothNot("PASS", "something passed")
-}
-
 // Issue 9737: verify that GOARM and GO386 affect the computed build ID.
 func TestBuildIDContainsArchModeEnv(t *testing.T) {
 	if testing.Short() {
@@ -4118,60 +3992,6 @@ func main() {}`)
 	}, func() {
 		tg.setenv("GOARM", "7")
 	}))
-}
-
-func TestTestRegexps(t *testing.T) {
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.run("test", "-cpu=1", "-run=X/Y", "-bench=X/Y", "-count=2", "-v", "testregexp")
-	var lines []string
-	for _, line := range strings.SplitAfter(tg.getStdout(), "\n") {
-		if strings.Contains(line, "=== RUN") || strings.Contains(line, "--- BENCH") || strings.Contains(line, "LOG") {
-			lines = append(lines, line)
-		}
-	}
-
-	// Important parts:
-	//	TestX is run, twice
-	//	TestX/Y is run, twice
-	//	TestXX is run, twice
-	//	TestZ is not run
-	//	BenchmarkX is run but only with N=1, once
-	//	BenchmarkXX is run but only with N=1, once
-	//	BenchmarkX/Y is run in full, twice
-	want := `=== RUN   TestX
-    TestX: x_test.go:6: LOG: X running
-=== RUN   TestX/Y
-    TestX/Y: x_test.go:8: LOG: Y running
-=== RUN   TestXX
-    TestXX: z_test.go:10: LOG: XX running
-=== RUN   TestX
-    TestX: x_test.go:6: LOG: X running
-=== RUN   TestX/Y
-    TestX/Y: x_test.go:8: LOG: Y running
-=== RUN   TestXX
-    TestXX: z_test.go:10: LOG: XX running
-    BenchmarkX: x_test.go:13: LOG: X running N=1
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=1
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=100
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=10000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=1000000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=100000000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=1000000000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=1
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=100
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=10000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=1000000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=100000000
-    BenchmarkX/Y: x_test.go:15: LOG: Y running N=1000000000
-    BenchmarkXX: z_test.go:18: LOG: XX running N=1
-`
-
-	have := strings.Join(lines, "")
-	if have != want {
-		t.Errorf("reduced output:<<<\n%s>>> want:<<<\n%s>>>", have, want)
-	}
 }
 
 func TestListTests(t *testing.T) {
@@ -4765,14 +4585,6 @@ func TestInstallDeps(t *testing.T) {
 
 	tg.run("install", "-i", "p2")
 	tg.mustExist(p1)
-}
-
-func TestGoTestMinusN(t *testing.T) {
-	// Intent here is to verify that 'go test -n' works without crashing.
-	// This reuses flag_test.go, but really any test would do.
-	tg := testgo(t)
-	defer tg.cleanup()
-	tg.run("test", "testdata/flag_test.go", "-n", "-args", "-v=7")
 }
 
 func TestGoTestJSON(t *testing.T) {
