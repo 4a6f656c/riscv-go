@@ -920,8 +920,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 		// <load> $imm, FROM3, TO (load $imm+(FROM3), TO)
 		// <store> $imm, FROM3, TO (store $imm+(TO), FROM3)
-		case ALD, ALB, ALH, ALW, ALBU, ALHU, ALWU,
-			ASD, ASB, ASH, ASW:
+		case ALB, ALH, ALW, ALD, ALBU, ALHU, ALWU, AFLW, AFLD, ASB, ASH, ASW, ASD, AFSW, AFSD:
 			// LUI $high, TMP
 			// ADDI $low, TMP, TMP
 			q := *p
@@ -935,7 +934,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			p = loadImmIntoRegTmp(ctxt, p, newprog, low, high)
 
 			switch q.As {
-			case ALD, ALB, ALH, ALW, ALBU, ALHU, ALWU:
+			case ALB, ALH, ALW, ALD, ALBU, ALHU, ALWU, AFLW, AFLD:
 				// ADD TMP, FROM3, TMP
 				// <load> $0, TMP, TO
 				p.As = AADD
@@ -948,7 +947,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p.To = q.To
 				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: 0}
 				p.SetFrom3(obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP})
-			case ASD, ASB, ASH, ASW:
+			case ASB, ASH, ASW, ASD, AFSW, AFSD:
 				// ADD TMP, TO, TMP
 				// <store> $0, FROM3, TMP
 				p.As = AADD
