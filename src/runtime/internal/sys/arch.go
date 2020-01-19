@@ -14,7 +14,7 @@ const (
 	MIPS
 	MIPS64
 	PPC64
-	RISCV
+	RISCV64
 	S390X
 	WASM
 )

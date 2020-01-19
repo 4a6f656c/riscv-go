@@ -1902,7 +1902,6 @@ const (
 	OpRISCV64MOVHconst
 	OpRISCV64MOVWconst
 	OpRISCV64MOVDconst
-	OpRISCV64MOVSconst
 	OpRISCV64MOVBload
 	OpRISCV64MOVHload
 	OpRISCV64MOVWload
@@ -25267,18 +25266,6 @@ var opcodeTable = [...]opInfo{
 	},
 	{
 		name:              "MOVDconst",
-		auxType:           auxInt64,
-		argLen:            0,
-		rematerializeable: true,
-		asm:               riscv.AMOV,
-		reg: regInfo{
-			outputs: []outputInfo{
-				{0, 1073741812}, // X3 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14 X15 X16 X17 X18 X19 X20 X21 X22 X23 X24 X25 X26 X27 X28 X29 X30
-			},
-		},
-	},
-	{
-		name:              "MOVSconst",
 		auxType:           auxInt64,
 		argLen:            0,
 		rematerializeable: true,

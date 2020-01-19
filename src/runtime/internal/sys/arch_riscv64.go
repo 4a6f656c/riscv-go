@@ -5,10 +5,10 @@
 package sys
 
 const (
-	ArchFamily          = RISCV
+	ArchFamily          = RISCV64
 	BigEndian           = false
-	CacheLineSize       = 64   // TODO(prattmic)
-	DefaultPhysPageSize = 4096 // TODO(prattmic)
+	CacheLineSize       = 64
+	DefaultPhysPageSize = 4096
 	PCQuantum           = 4
 	Int64Align          = 8
 	HugePageSize        = 1 << 21

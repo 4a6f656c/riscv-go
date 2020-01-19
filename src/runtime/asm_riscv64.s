@@ -316,7 +316,8 @@ TEXT runtime·gosave(SB), NOSPLIT|NOFRAME, $0-8
 
 // func asmcgocall(fn, arg unsafe.Pointer) int32
 TEXT ·asmcgocall(SB),NOSPLIT,$0-20
-	WORD $0
+	// TODO(jsing): Add support for cgo - issue #36641.
+	WORD $0		// crash
 
 // func asminit()
 TEXT runtime·asminit(SB),NOSPLIT|NOFRAME,$0-0
@@ -454,7 +455,8 @@ TEXT runtime·goexit(SB),NOSPLIT|NOFRAME,$0-0
 
 // func cgocallback_gofunc(fv uintptr, frame uintptr, framesize, ctxt uintptr)
 TEXT ·cgocallback_gofunc(SB),NOSPLIT,$24-32
-	WORD $0
+	// TODO(jsing): Add support for cgo - issue #36641.
+	WORD $0		// crash
 
 TEXT runtime·breakpoint(SB),NOSPLIT|NOFRAME,$0-0
 	EBREAK

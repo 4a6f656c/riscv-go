@@ -3,6 +3,7 @@
 
 package ssa
 
+import "math"
 import "cmd/compile/internal/types"
 
 func rewriteValueRISCV64(v *Value) bool {
@@ -779,12 +780,12 @@ func rewriteValueRISCV64_OpConst32F_0(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (Const32F [val])
-	// result: (FMVSX (MOVSconst [val]))
+	// result: (FMVSX (MOVWconst [int64(int32(math.Float32bits(float32(math.Float64frombits(uint64(val))))))]))
 	for {
 		val := v.AuxInt
 		v.reset(OpRISCV64FMVSX)
-		v0 := b.NewValue0(v.Pos, OpRISCV64MOVSconst, typ.Float32)
-		v0.AuxInt = val
+		v0 := b.NewValue0(v.Pos, OpRISCV64MOVWconst, typ.UInt32)
+		v0.AuxInt = int64(int32(math.Float32bits(float32(math.Float64frombits(uint64(val))))))
 		v.AddArg(v0)
 		return true
 	}
@@ -1192,14 +1193,19 @@ func rewriteValueRISCV64_OpEq8_0(v *Value) bool {
 	}
 }
 func rewriteValueRISCV64_OpEqB_0(v *Value) bool {
+	b := v.Block
+	typ := &b.Func.Config.Types
 	// match: (EqB x y)
-	// result: (Eq8 x y)
+	// result: (XORI [1] (XOR <typ.Bool> x y))
 	for {
 		y := v.Args[1]
 		x := v.Args[0]
-		v.reset(OpEq8)
-		v.AddArg(x)
-		v.AddArg(y)
+		v.reset(OpRISCV64XORI)
+		v.AuxInt = 1
+		v0 := b.NewValue0(v.Pos, OpRISCV64XOR, typ.Bool)
+		v0.AddArg(x)
+		v0.AddArg(y)
+		v.AddArg(v0)
 		return true
 	}
 }
@@ -2977,11 +2983,11 @@ func rewriteValueRISCV64_OpNeq8_0(v *Value) bool {
 }
 func rewriteValueRISCV64_OpNeqB_0(v *Value) bool {
 	// match: (NeqB x y)
-	// result: (Neq8 x y)
+	// result: (XOR x y)
 	for {
 		y := v.Args[1]
 		x := v.Args[0]
-		v.reset(OpNeq8)
+		v.reset(OpRISCV64XOR)
 		v.AddArg(x)
 		v.AddArg(y)
 		return true

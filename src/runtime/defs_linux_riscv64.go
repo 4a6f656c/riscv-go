@@ -1,8 +1,6 @@
-// FIXME(prattmic): this is not generated with cgo; it has been manually
-// modified from the ppc64 version based on the RISCV Linux port.
-//
-// created by cgo -cdefs and then converted to Go
-// cgo -cdefs defs_linux.go defs3_linux.go
+// Generated using cgo, then manually converted into appropriate naming and code
+// for the Go runtime.
+// go tool cgo -godefs defs_linux.go defs1_linux.go defs2_linux.go
 
 package runtime
 
@@ -26,9 +24,10 @@ const (
 	_MADV_HUGEPAGE   = 0xe
 	_MADV_NOHUGEPAGE = 0xf
 
-	_SA_RESTART = 0x10000000
-	_SA_ONSTACK = 0x8000000
-	_SA_SIGINFO = 0x4
+	_SA_RESTART  = 0x10000000
+	_SA_ONSTACK  = 0x8000000
+	_SA_RESTORER = 0x0
+	_SA_SIGINFO  = 0x4
 
 	_SIGHUP    = 0x1
 	_SIGINT    = 0x2
@@ -139,14 +138,10 @@ type epollevent struct {
 	data      [8]byte // unaligned uintptr
 }
 
-// created by cgo -cdefs and then converted to Go
-// cgo -cdefs defs_linux.go defs3_linux.go
-
 const (
-	_O_RDONLY    = 0x0
-	_O_NONBLOCK  = 0x800
-	_O_CLOEXEC   = 0x80000
-	_SA_RESTORER = 0
+	_O_RDONLY   = 0x0
+	_O_NONBLOCK = 0x800
+	_O_CLOEXEC  = 0x80000
 )
 
 type user_regs_struct struct {

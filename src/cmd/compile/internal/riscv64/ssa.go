@@ -5,8 +5,6 @@
 package riscv64
 
 import (
-	"math"
-
 	"cmd/compile/internal/gc"
 	"cmd/compile/internal/ssa"
 	"cmd/compile/internal/types"
@@ -17,7 +15,7 @@ import (
 // ssaRegToReg maps ssa register numbers to obj register numbers.
 var ssaRegToReg = []int16{
 	riscv.REG_X0,
-	// X1 (RA): unused
+	// X1 (LR): unused
 	riscv.REG_X2,
 	riscv.REG_X3,
 	riscv.REG_X4,
@@ -273,14 +271,6 @@ func ssaGenValue(s *gc.SSAGenState, v *ssa.Value) {
 		p.From.Offset = v.AuxInt
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg()
-	case ssa.OpRISCV64MOVSconst:
-		p := s.Prog(v.Op.Asm())
-		// Convert the float to the equivalent integer literal so we can
-		// move it using existing infrastructure.
-		p.From.Type = obj.TYPE_CONST
-		p.From.Offset = int64(int32(math.Float32bits(float32(math.Float64frombits(uint64(v.AuxInt))))))
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = v.Reg()
 	case ssa.OpRISCV64MOVaddr:
 		p := s.Prog(v.Op.Asm())
 		p.From.Type = obj.TYPE_ADDR
@@ -471,7 +461,6 @@ func ssaGenBlock(s *gc.SSAGenState, b, next *ssa.Block) {
 			s.Branches = append(s.Branches, gc.Branch{P: p, B: b.Succs[0].Block()})
 		}
 	case ssa.BlockExit:
-		s.Prog(obj.AUNDEF)
 	case ssa.BlockRet:
 		s.Prog(obj.ARET)
 	case ssa.BlockRetJmp:
@@ -502,6 +491,6 @@ func ssaGenBlock(s *gc.SSAGenState, b, next *ssa.Block) {
 		p.From.Reg = riscv.REG_ZERO
 
 	default:
-		b.Fatalf("Unhandled kind %v", b.Kind)
+		b.Fatalf("Unhandled block: %s", b.LongString())
 	}
 }

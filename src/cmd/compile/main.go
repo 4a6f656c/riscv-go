@@ -33,7 +33,7 @@ var archInits = map[string]func(*gc.Arch){
 	"mips64le": mips64.Init,
 	"ppc64":    ppc64.Init,
 	"ppc64le":  ppc64.Init,
-	"riscv64":    riscv64.Init,
+	"riscv64":  riscv64.Init,
 	"s390x":    s390x.Init,
 	"wasm":     wasm.Init,
 }

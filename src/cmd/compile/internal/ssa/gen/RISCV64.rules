@@ -10,11 +10,11 @@
 //   but left+right shift is simple and uniform, and we don't have real hardware to do perf testing on anyway.
 // * Use the zero register instead of moving 0 into a register.
 // * Add rules to avoid generating a temp bool value for (If (SLT[U] ...) ...).
-// * Optimize left and right shift by simplifying SLTIU, Neg, and ADD for
-//   constants.
+// * Optimize left and right shift by simplifying SLTIU, Neg, and ADD for constants.
 // * Arrange for non-trivial Zero and Move lowerings to use aligned loads and stores.
 // * Eliminate zero immediate shifts, adds, etc.
 // * Use a Duff's device for some moves and zeros.
+// * Avoid using Neq32 for writeBarrier.enabled checks.
 
 // Lowering arithmetic
 (Add64 x y) -> (ADD x y)
@@ -425,8 +425,8 @@
 // Boolean ops; 0=false, 1=true
 (AndB x y) -> (AND  x y)
 (OrB  x y) -> (OR   x y)
-(EqB  x y) -> (Eq8  x y)
-(NeqB x y) -> (Neq8 x y)
+(EqB  x y) -> (XORI [1] (XOR <typ.Bool> x y))
+(NeqB x y) -> (XOR  x y)
 (Not  x)   -> (XORI [1] x)
 
 // Lowering pointer arithmetic
@@ -439,7 +439,7 @@
 (Const16 [val]) -> (MOVHconst [val])
 (Const32 [val]) -> (MOVWconst [val])
 (Const64 [val]) -> (MOVDconst [val])
-(Const32F [val]) -> (FMVSX (MOVSconst [val]))
+(Const32F [val]) -> (FMVSX (MOVWconst [int64(int32(math.Float32bits(float32(math.Float64frombits(uint64(val))))))]))
 (Const64F [val]) -> (FMVDX (MOVDconst [val]))
 (ConstNil) -> (MOVDconst [0])
 (ConstBool [b]) -> (MOVBconst [b])

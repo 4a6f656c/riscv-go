@@ -1,4 +1,4 @@
-// Copyright 2017 The Go Authors. All rights reserved.
+// Copyright 2019 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -16,8 +16,7 @@ TEXT ·makeFuncStub(SB),(NOSPLIT|WRAPPER),$32
 	MOV	T0, 16(SP)
 	ADD	$32, SP, T1
 	MOV	T1, 24(SP)
-	MOV	$0, T2
-	MOVB	T2, 32(SP)
+	MOVB	R0, 32(SP)
 	CALL	·callReflect(SB)
 	RET
 
@@ -32,7 +31,6 @@ TEXT ·methodValueCall(SB),(NOSPLIT|WRAPPER),$32
 	MOV	T0, 16(SP)
 	ADD	$32, SP, T1
 	MOV	T1, 24(SP)
-	MOV	$0, T2
-	MOVB	T2, 32(SP)
+	MOVB	R0, 32(SP)
 	CALL	·callMethod(SB)
 	RET

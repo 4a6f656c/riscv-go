@@ -50,6 +50,8 @@
 #define SYS_tkill		130
 #define SYS_write		64
 
+#define FENCE WORD $0x0ff0000f
+
 // func exit(code int32)
 TEXT runtime·exit(SB),NOSPLIT|NOFRAME,$0-4
 	MOVW	code+0(FP), A0
@@ -61,10 +63,9 @@ TEXT runtime·exit(SB),NOSPLIT|NOFRAME,$0-4
 TEXT runtime·exitThread(SB),NOSPLIT|NOFRAME,$0-8
 	MOV	wait+0(FP), A0
 	// We're done using the stack.
-	MOV	$0, A1
-	//SYNC // XXX
-	MOVW	A1, (A0)
-	//SYNC // XXX
+	FENCE
+	MOVW	ZERO, (A0)
+	FENCE
 	MOV	$0, A0	// exit code
 	MOV	$SYS_exit, A7
 	ECALL
@@ -102,9 +103,6 @@ TEXT runtime·write1(SB),NOSPLIT|NOFRAME,$0-28
 	MOVW	n+16(FP), A2
 	MOV	$SYS_write, A7
 	ECALL
-	MOV	$-4096, T0
-	BGEU	T0, A0, 2(PC)
-	MOV	$-1, A0
 	MOVW	A0, ret+24(FP)
 	RET
 
@@ -115,9 +113,6 @@ TEXT runtime·read(SB),NOSPLIT|NOFRAME,$0-28
 	MOVW	n+16(FP), A2
 	MOV	$SYS_read, A7
 	ECALL
-	MOV	$-4096, T0
-	BGEU	T0, A0, 2(PC)
-	MOV	$-1, A0
 	MOVW	A0, ret+24(FP)
 	RET
 
@@ -175,7 +170,7 @@ TEXT runtime·gettid(SB),NOSPLIT,$0-4
 TEXT runtime·raise(SB),NOSPLIT|NOFRAME,$0
 	MOV	$SYS_gettid, A7
 	ECALL
-	// MOVW	A0, A0	// arg 1 tid
+	// arg 1 tid - already in A0
 	MOVW	sig+0(FP), A1	// arg 2
 	MOV	$SYS_tkill, A7
 	ECALL
@@ -185,18 +180,20 @@ TEXT runtime·raise(SB),NOSPLIT|NOFRAME,$0
 TEXT runtime·raiseproc(SB),NOSPLIT|NOFRAME,$0
 	MOV	$SYS_getpid, A7
 	ECALL
-	// MOVW	A0, A0		// arg 1 pid
+	// arg 1 pid - already in A0
 	MOVW	sig+0(FP), A1	// arg 2
 	MOV	$SYS_kill, A7
 	ECALL
 	RET
 
+// func getpid() int
 TEXT ·getpid(SB),NOSPLIT|NOFRAME,$0-8
 	MOV	$SYS_getpid, A7
 	ECALL
 	MOV	A0, ret+0(FP)
 	RET
 
+// func tgkill(tgid, tid, sig int)
 TEXT ·tgkill(SB),NOSPLIT|NOFRAME,$0-24
 	MOV	tgid+0(FP), A0
 	MOV	tid+8(FP), A1
@@ -262,7 +259,7 @@ TEXT runtime·rtsigprocmask(SB),NOSPLIT|NOFRAME,$0-28
 	ECALL
 	MOV	$-4096, T0
 	BLTU	A0, T0, 2(PC)
-	WORD	$0
+	WORD	$0	// crash
 	RET
 
 // func rt_sigaction(sig uintptr, new, old *sigactiont, size uintptr) int32
@@ -306,7 +303,7 @@ TEXT runtime·cgoSigtramp(SB),NOSPLIT,$0
 	MOV	$runtime·sigtramp(SB), T1
 	JALR	ZERO, T1
 
-// func mmap(addr unsafe.Pointer, n uintptr, prot, flags, fd int32, off uint32) unsafe.Pointer
+// func mmap(addr unsafe.Pointer, n uintptr, prot, flags, fd int32, off uint32) (p unsafe.Pointer, err int)
 TEXT runtime·mmap(SB),NOSPLIT|NOFRAME,$0
 	MOV	addr+0(FP), A0
 	MOV	n+8(FP), A1
@@ -335,7 +332,7 @@ TEXT runtime·munmap(SB),NOSPLIT|NOFRAME,$0
 	ECALL
 	MOV	$-4096, T0
 	BLTU	A0, T0, 2(PC)
-	WORD	$0
+	WORD	$0	// crash
 	RET
 
 // func madvise(addr unsafe.Pointer, n uintptr, flags int32)
@@ -390,7 +387,7 @@ child:
 	MOV	-32(X2), T0
 	MOV	$1234, A0
 	BEQ	A0, T0, good
-	WORD	$0	//crash
+	WORD	$0	// crash
 
 good:
 	// Initialize m->procid to Linux tid
@@ -428,7 +425,7 @@ TEXT runtime·sigaltstack(SB),NOSPLIT|NOFRAME,$0
 	ECALL
 	MOV	$-4096, T0
 	BLTU	A0, T0, 2(PC)
-	WORD	$0
+	WORD	$0	// crash
 	RET
 
 // func osyield()
